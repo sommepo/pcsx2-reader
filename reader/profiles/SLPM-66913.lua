@@ -4,16 +4,15 @@
 -- reader: version SLPM-66913, disc version 1.01
 -- ひぐらしのなく頃に祭 カケラ遊び (Alchemist, PS2, 2007), SLPM-66913. Program C08A36F0.
 --
--- The game runs a script that is in memory whole. A message of it is a string: the speaker's
--- name, the letter r, then the text with one-letter commands in it (k waits for the button and
--- goes on in the same place, r begins a new row, v names a voice, b gives a reading for the
--- word between < and >, an exclamation mark stands before a plain ASCII character). Kana and
--- punctuation are single bytes that stand for the 64 characters of a table in the program;
--- everything else is Shift-JIS.
+-- The whole script is in memory. A message is a string: speaker name, the letter r, then text
+-- with one-letter commands (k waits for the button, r starts a row, v names a voice, b gives
+-- the reading of the word between < and >, ! escapes an ASCII character). Kana and
+-- punctuation are single bytes indexing a 64-character table in the program; the rest is
+-- Shift-JIS.
 --
--- The game lays a message out once, when it begins: a list with one entry per character has
--- where the character goes in the text box and the moment it comes up, in milliseconds from
--- the message's start. A clock runs while characters come up and stands still at each k.
+-- When a message starts, the game lays it out once: one entry per character with its box in
+-- the text window and the time it appears (ms from the message start). A clock runs while
+-- characters appear and stops at each k.
 
 local BUILD = "C08A36F0"
 if reader.build_id ~= BUILD then
@@ -21,7 +20,7 @@ if reader.build_id ~= BUILD then
           "), the game is " .. tostring(reader.build_id))
 end
 
--- Data of the program (it is loaded where it was linked for).
+-- Addresses (the program loads at its link address).
 local MESSAGE_TEXT = 0x002ba074  -- pointer to the string of the message being shown, in the script
 local KANA_TABLE = 0x00245598    -- 64 Shift-JIS characters, for the bytes 0xA0 to 0xDF
 local BOX_LEFT = 0x002baf84      -- the text box in the picture: left, top, right, bottom
@@ -35,8 +34,7 @@ local ENTRY = 52                 -- bytes to an entry: at +4 left, top, right, b
 local SMALL = 15                 -- an entry lower than this is a character of a reading: those
                                  -- stand in the list after their word, and are not the text's
 
--- A part is reported when it has been all there for this many frames: what a skip runs
--- through is not read.
+-- Frames a part must stay complete before it is reported; skipped text is not read.
 local SHOWN_FRAMES = 4
 
 local kana -- the table's characters as UTF-8, by byte
@@ -58,8 +56,7 @@ local function is_lead(b)
     return (b >= 0x81 and b <= 0x9f) or (b >= 0xe0 and b <= 0xfc)
 end
 
--- One character of the string at `at`: its text, and where the next one begins. Nothing for
--- a plain ASCII byte, which is a command.
+-- One character of the string at `at` and the next position; nil for an ASCII command byte.
 local function character(raw, at)
     local b = raw:byte(at)
     if b >= 0xa0 and b <= 0xdf then
@@ -70,9 +67,8 @@ local function character(raw, at)
     return nil, at
 end
 
--- Takes a message apart. Returns the speaker and the parts between the waits: each a list of
--- pieces { text = one character, or "\n" with newline = true } and its ruby groups
--- { first piece, last piece, reading }.
+-- Parses a message into the speaker and the parts between waits: each a list of pieces
+-- { text = one character, or "\n" with newline = true } and ruby groups { first, last, reading }.
 local function parse(raw)
     local at, speaker = 1, {}
     -- The speaker's name stands before the first r.
@@ -161,9 +157,9 @@ local function withdraw()
     shown = {}
 end
 
--- The entries of the text's own characters `first` to `last` (counted from 0 over the whole
--- message): each { left, top, width, height, moment }. Nothing when the list does not hold
--- as many characters as the message has, which is how another message's list is told.
+-- Entries of the text's characters `first` to `last` (from 0 over the message), each
+-- { left, top, width, height, moment }. nil when the list's length does not match the message
+-- (the list belongs to another message).
 local function entries(first, last, total)
     local list, stop = mem.u32(GLYPHS), mem.u32(GLYPHS_END)
     if not list or not stop or list == 0 or stop <= list then return nil end
@@ -199,7 +195,7 @@ reader.on_frame(function(frame)
         withdraw()
         reported, complete_since, parts, speaker, raw_text = 0, nil, nil, nil, nil
         if not pointer or pointer < 0x00100000 or pointer >= 0x02000000 then return end
-        -- The string's length stands two bytes before it, and the message's command seven.
+        -- The string's length is two bytes before it, the message command seven bytes before.
         if mem.u8(pointer - 7) ~= 0x86 then return end
         local length = mem.u16(pointer - 2)
         if not length or length == 0 or length > 4096 then return end
@@ -209,7 +205,7 @@ reader.on_frame(function(frame)
     end
     if not parts or reported >= #parts then return end
 
-    -- Where the next part's characters are in the list: a new row has no entry.
+    -- Where the next part's characters start in the list (a new row has no entry).
     local first = 0
     for i = 1, reported do
         for _, piece in ipairs(parts[i].pieces) do
@@ -241,7 +237,7 @@ reader.on_frame(function(frame)
     complete_since = complete_since or frame
     if frame - complete_since < SHOWN_FRAMES then return end
 
-    -- The part is all there: its text, its readings and a cell for every character.
+    -- The part is complete: report its text, readings and a cell per character.
     local left, top = mem.u32(BOX_LEFT) or 45, mem.u32(BOX_TOP) or 292
     local b = reader.builder()
     local cells, ruby = {}, {}

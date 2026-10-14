@@ -4,17 +4,14 @@
 -- reader: version SLPM-65555
 -- ドラゴンクエストV 天空の花嫁 (Square Enix, PS2, 2004), SLPM-65555. Program B64E9939.
 --
--- The message window keeps the rows it shows as one Shift-JIS text (a line feed between rows,
--- names and numbers already put in, everything in full-width characters). Beside it: where the
--- game is in the message's source (nothing while no window is up), how many characters the
--- rows have, how many of them have been typed out (a float), and a byte that is not zero while
--- the rows move up to make room. When a button is asked for and the message goes on, the rows
--- move up and the new ones are typed below the ones that stay: the profile reports the rows
--- that are new, when they are all there.
+-- The message window holds its rows as one Shift-JIS text (line feeds between rows, names and
+-- numbers filled in, all full-width). Beside it: the position in the message source (0 while
+-- no window is up), the character count, how many are typed (a float), and a byte set while
+-- rows scroll. When the message continues, rows scroll up and new ones are typed below; the
+-- new rows are reported once complete.
 --
--- A row has no table of places. The game draws with a font whose every character has a width
--- (its table is in memory: a character's code, its width, its picture), one after the other
--- from the window's left edge, in a picture 512 wide: the profile does the same.
+-- There is no position table. Characters are laid out from the window's left edge using the
+-- font's width table (code, width, glyph) in a 512-wide picture, as the game does.
 
 local BUILD = "B64E9939"
 if reader.build_id ~= BUILD then
@@ -49,8 +46,8 @@ local function load_widths()
         local code, width = string.unpack("<I2B", raw, k * 8 + 1)
         out[code] = width
     end
-    -- The table is the font's when it has the full-width space. The game sets a space
-    -- narrower than its table says (measured in pictures).
+    -- The table is valid when it has the full-width space. The game draws the space narrower
+    -- than the table says (measured).
     if not out[0x8140] then return nil end
     out[0x8140] = SPACE_WIDTH
     return out
@@ -84,9 +81,8 @@ local function drop_all()
     layouts = {}
 end
 
--- Text and cells of rows first..last of `rows` (each a list of characters). The space a later
--- row of a speaker's is set in by is left out; rows are joined by the space the game puts
--- between words.
+-- Text and cells of rows first..last of `rows`. Leading spaces of later rows are dropped;
+-- rows are joined with a full-width space.
 local function compose(rows, first, last)
     local b, cells, speaker = reader.builder(), {}, nil
     for index = first, last do
@@ -175,7 +171,7 @@ reader.on_frame(function()
     for k = 1, #rows do unchanged = unchanged and same(rows[k], shown[k]) end
     if unchanged then return end
 
-    -- The rows that stayed: as many of the window's last rows as now are its first.
+    -- Rows kept after scrolling: the old last rows that are now the first.
     local kept = 0
     for k = math.min(#shown, #rows - 1), 1, -1 do
         local fits = true
@@ -195,7 +191,7 @@ reader.on_frame(function()
     end
     parts = still
 
-    -- The new rows, a part for each speaker.
+    -- New rows, one part per speaker.
     local first = kept + 1
     while first <= #rows do
         local last = first

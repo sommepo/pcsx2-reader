@@ -4,14 +4,13 @@
 -- reader: version SLPM-65051
 -- サイレントヒル2 (Konami, PS2, 2001), SLPM-65051. Program E36E16C9. Japanese text only.
 --
--- A message is a row of 16-bit numbers. A number below 0xf000 is a character: the place of the
--- character in the font, which has the characters of Shift-JIS (as Windows has it) in their
--- order, without the gaps, after 223 places of its own. Numbers from 0xf000 on are commands:
--- 0xfffd begins a new row, 0xffff ends the message.
+-- A message is a list of 16-bit codes. Below 0xf000 a code is a font cell: 223 cells of the
+-- game's own, then Shift-JIS (Windows' variant) in order without its gaps. 0xfffd starts a
+-- new row, 0xffff ends the message.
 --
--- The game keeps where the message on the screen begins, how many of its characters are
--- shown (nothing while no text is up) and where its rows begin from the left. Rows are 30
--- apart, around a line near the bottom of a picture 640 by 448; a character is 27 wide.
+-- Read: the message's address, how many characters are shown (0 while no text is up) and
+-- the rows' left edge. Rows are 30 apart around a line near the bottom of the 640x448
+-- picture; a character is 27 wide.
 
 local BUILD = "E36E16C9"
 if reader.build_id ~= BUILD then
@@ -27,8 +26,7 @@ local NEW_ROW, PAUSE, END = 0xfffd, 0xfffe, 0xffff
 local ADVANCE, PITCH, HEIGHT, MIDDLE = 27, 30, 26, 388
 local UNITS_MAX = 400
 
--- The characters of Shift-JIS in their order, without the gaps: the runs of codes that are
--- characters (first and last of each), up to the last row of kanji.
+-- Shift-JIS without its gaps, as runs of codes (first, last), up to the last kanji row.
 local RUNS = {
     0x8140,0x81ac, 0x81b8,0x81bf, 0x81c8,0x81ce, 0x81da,0x81e8, 0x81f0,0x81f7, 0x81fc,0x81fc,
     0x824f,0x8258, 0x8260,0x8279, 0x8281,0x829a, 0x829f,0x82f1, 0x8340,0x8396, 0x839f,0x83b6,
@@ -54,7 +52,7 @@ do
     end
 end
 
--- The rows of the message at `address`: lists of characters; the units as a string.
+-- The rows of the message at `address` as lists of characters, and its raw units.
 local function read_message(address)
     local raw = mem.read(address, UNITS_MAX * 2)
     if not raw or #raw < UNITS_MAX * 2 then return nil end
@@ -71,7 +69,7 @@ local function read_message(address)
             row[#row + 1] = CELLS[unit - FIRST] or "?"
             count = count + 1
         elseif unit < FIRST and count > 0 then
-            -- The font's own places below the Shift-JIS ones: not known.
+            -- The game's own cells below Shift-JIS are unknown: a placeholder is shown.
             row[#row + 1] = "?"
             count = count + 1
         end
@@ -113,7 +111,7 @@ reader.on_frame(function()
     local longest = 0
     for _, row in ipairs(rows) do longest = math.max(longest, #row) end
     if left == 0 or left > 640 then left = 320 - longest * ADVANCE / 2 end
-    -- The rows are one text: the game breaks a sentence where it likes.
+    -- The rows form one text: the game wraps sentences anywhere.
     local b, cells = reader.builder(), {}
     local top = MIDDLE - #rows * PITCH / 2
     for index, row in ipairs(rows) do

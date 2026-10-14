@@ -4,12 +4,10 @@
 -- reader: version SLPM-65550, disc version 1.02
 -- Remember11 -the age of infinity- (KID, PS2, 2004), SLPM-65550. Program B33522CD.
 --
--- The game's script has its text as Shift-JIS strings with commands that begin with a percent
--- sign. When a message begins, the game puts the text without the commands into a buffer and
--- lays it out: a table with one entry per character has how far from the text window's left
--- edge it stands, how wide it is and how visible (the characters come up one after another).
--- A row has no number of its own: a new row begins where a character stands no further right
--- than the one before it.
+-- Script text is Shift-JIS with %-commands. When a message starts, the game copies the text
+-- without commands to a buffer and fills a table with one entry per character: offset from
+-- the window's left edge, glyph columns, visibility. Rows are not numbered: a row starts
+-- where a character's offset does not increase.
 
 local BUILD = "B33522CD"
 if reader.build_id ~= BUILD then
@@ -17,7 +15,7 @@ if reader.build_id ~= BUILD then
           "), the game is " .. tostring(reader.build_id))
 end
 
--- Data of the program (it is loaded where it was linked for).
+-- Addresses (the program loads at its link address).
 local SCRIPT_AT = 0x00afcf78   -- where the script is being carried out
 local TEXT = 0x00afcf80        -- the message's text, commands taken out, ends with a zero
 local WINDOW = 0x00b0d8f8      -- the text window in the picture: left, top, width, height
@@ -41,8 +39,7 @@ local TEXT_MAX = 1024
 local OPEN, CLOSE = "「", "」"
 local NAME_MAX = 12            -- characters of a speaker's name at most
 
--- A message is reported when it has been all there for this many frames: what a skip runs
--- through is not read.
+-- Frames a message must stay complete before it is reported; skipped text is not read.
 local SHOWN_FRAMES = 4
 
 local function is_lead(b)
@@ -82,9 +79,9 @@ local function reset()
     shown_raw, shown_at, reported, parts, complete_since = nil, nil, 0, 0, nil
 end
 
--- The answers of a choice: one event, an answer to a line. The game has no table of places
--- for them, so each row is laid out here as the game does a row of a message (a glyph's
--- columns and four empty ones to the next) and centred.
+-- A choice's answers as one event, one answer per line. The game keeps no character table
+-- for them: each row is laid out like a message row (glyph columns plus four empty ones)
+-- and centred.
 local answers_shown
 local function choice()
     local number = mem.u32(ANSWERS)
@@ -162,8 +159,8 @@ reader.on_frame(function(frame)
     end
     local table_raw = mem.read(ENTRIES, count * ENTRY)
     if not table_raw or #table_raw < count * ENTRY then return end
-    -- The message is all there when its last character but one is fully visible (the last
-    -- one's entry does not say: it is the one the game hangs its waiting mark on).
+    -- Complete when the second-to-last character is fully visible (the last entry carries the
+    -- wait mark and has no visibility).
     local settled = count < 2 and 0 or (count - 2) * ENTRY
     if count >= 2 and table_raw:byte(settled + 45) ~= SHOWN then
         complete_since = nil
@@ -173,8 +170,8 @@ reader.on_frame(function(frame)
     if frame - complete_since < SHOWN_FRAMES then return end
     complete_since = nil
 
-    -- A message that goes on after a wait has the earlier text before it: only what is new
-    -- is reported. Anything else is a new message.
+    -- A message continued after a wait starts with the earlier text: only the new part is
+    -- reported.
     local first = 1
     if shown_raw and #raw > #shown_raw and raw:sub(1, #shown_raw) == shown_raw and reported < count then
         first = reported + 1
@@ -183,9 +180,8 @@ reader.on_frame(function(frame)
         parts = 0
     end
 
-    -- A speaker's name stands before the opening bracket of what is said, in the same text:
-    -- a few characters, then the bracket, and the closing bracket at the very end. The game
-    -- shows the name in a box of its own, above the text: the rows are counted after it.
+    -- The speaker's name precedes 「 in the same text, with 」 at the end. The game draws the
+    -- name in its own box above the text, so rows are counted after it.
     local speaker, said = nil, 1
     if chars[count] == CLOSE then
         for index = 2, math.min(count - 1, NAME_MAX + 1) do

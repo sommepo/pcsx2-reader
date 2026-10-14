@@ -4,32 +4,26 @@
 -- reader: version SLPS-25918
 -- アマガミ (Enterbrain, PS2, 2009), SLPS-25918. Program D72C9E2A.
 --
--- Two things are read. **What is said** comes from the scene's script: the game keeps a row
--- of values for it (20 bytes each: two numbers, nothing, a kind, something of the kind's),
--- a message's text among them, and for each script that runs a number that says which value
--- it used last; while a message is up, the scene's stays 12 bytes past the message's text.
--- **Where the characters stand** comes from what the game draws: its list of things to
--- draw has a picture for every character on the screen (24 by 14 in a field of the
--- interlaced picture, twice each for the shadow), with its place. Nothing in a picture says
--- which character it is, so the pictures are counted off against the text: the last of them,
--- in reading order, are the message's (a name in front of a message has pictures too, and
--- the message before may still stand in the rows above).
--- The number does not stay at a message while the message is up (for a line with a voice it
--- is hardly ever there), so the message is made out from the pictures: when they have
--- stopped coming, every text near where the scripts are is tried against them, and the one
--- that fits is the message: as many characters, rows breaking where its rows break, the
--- same picture wherever a character is the same. Which picture is which character is
--- learnt from every message made out, and a text is taken at once when half its pictures
--- are known to be its characters. Before that (after a start) a message is taken when it
--- has stood for two seconds and is the only text that fits, or when a script was seen at
--- it; short messages may go unreported until then. A message is reported when it has come
--- up in full.
+-- Two sources are read:
+-- - The scene script: an array of 20-byte values (two numbers, unused, a kind, a field of the
+--   kind) that includes the message texts, plus, per running script, a pointer to the value
+--   it used last. While a message is up, the scene script points 12 bytes past its text.
+-- - The draw list: one 24x14 glyph per character on screen (per field of the interlaced
+--   picture, drawn twice for the shadow) with its position. The last glyphs in reading order
+--   are the message's; a speaker's name and the previous message may stand before them.
+-- The script pointer rarely stays on the message being shown (almost never for voiced lines),
+-- so the message is identified from the glyphs. Once they stop changing, every text near the
+-- running scripts is matched against them: same length, same row breaks, the same glyph
+-- wherever the character is the same. Each match teaches glyph-to-character pairs; a text
+-- with half its glyphs known matches at once. Before anything is learnt (after a start) a
+-- text is taken when the glyphs have stood for STOOD checks and it is the only full match,
+-- or when a script was at it, so the first short messages may be missed. A message is
+-- reported once complete.
 --
--- A text value is its length (in Shift-JIS bytes) and where its characters are: 16-bit numbers, a
--- Shift-JIS character with its two bytes the other way round, or one byte for the marks
--- inside a message: ／ begins a new row, W and a number waits, V and a number is the voice,
--- R word R number reading puts a reading (of so many characters) over the word. A choice is the answers one after the
--- other, each beginning with ・, with the script at the first.
+-- A text value is its Shift-JIS length and a pointer to its characters: 16-bit Shift-JIS with
+-- the bytes swapped, or single bytes for inline marks (／ starts a row, W<n> waits, V<n> is
+-- the voice, R word R <n> reading puts a reading over n characters). A choice is its answers
+-- in sequence, each starting with ・; the script points at the first.
 
 local BUILD = "D72C9E2A"
 if reader.build_id ~= BUILD then
@@ -37,16 +31,15 @@ if reader.build_id ~= BUILD then
           "), the game is " .. tostring(reader.build_id))
 end
 
-local SCRIPTS, SCRIPTS_COUNT = 0x003a6bd8, 12   -- where the running scripts are, one number each
+local SCRIPTS, SCRIPTS_COUNT = 0x003a6bd8, 12   -- the running scripts, one pointer each
                                                 -- (the value a script is at is 12 bytes before)
 local AT, VALUE_SIZE = -12, 20
 local V_LENGTH, V_CHARS, V_KIND, TEXT_KIND, TEXT_TYPE = 0x00, 0x04, 0x0c, 0x300, 0x010a994c
 local NEAR = 0x3000    -- a scene's texts lie within so many bytes of where its script is
 local LENGTH_MAX = 800
--- The list of things to draw: a pool of 32-byte entries (the list it is in, the next entry,
--- something, the thing, its size); a thing with a picture is 0x60 bytes: at 0x48 and 0x58
--- the two corners (x and y as 16-bit numbers in sixteenths), in the console's own
--- coordinates, whose origin for this picture is (1728, 1936) with every second line.
+-- The draw list: a pool of 32-byte entries (owning list, next entry, unused, item, size). An
+-- item with a picture is 0x60 bytes, its corners at 0x48 and 0x58 (x, y as 16-bit sixteenths)
+-- in console coordinates; origin (1728, 1936) for this picture, every second line.
 local POOL, POOL_END, ENTRY_SIZE = 0x003dc000, 0x003e9000, 0x20
 local DRAWN_LIST, THING_SIZE = 0x002847c8, 0x60
 local THINGS, THINGS_END = 0x00554000, 0x00578000
@@ -54,12 +47,14 @@ local ORIGIN_X, ORIGIN_Y = 1728, 1936
 local GLYPH_W, GLYPH_H = 24, 14               -- a character's picture, in a field
 local WINDOW_TOP, WINDOW_BOTTOM = 270, 430    -- the message window, in the picture of 448 lines
 local CELL_HEIGHT = 28
-local EVERY, STEADY, STOOD, ALONE_MIN = 4, 3, 20, 8    -- the pictures are looked at every so many frames, and have to
-                               -- be the same so many times running
+-- Glyphs are read every EVERY frames. A match needs STEADY unchanged reads; a lone match
+-- (nothing learnt yet) needs STOOD unchanged reads and at least ALONE_MIN glyphs.
+local EVERY, STEADY, STOOD, ALONE_MIN = 4, 3, 20, 8
 local ANSWER_MARK, SPACE = "・", "　"
 local NAME_GLYPHS = 3
-local RECENT, LATELY = 3600, 240    -- frames a text is kept after a script was last at it
-local SHEET = 1024     -- the sheet of characters is so wide and high; a place in it comes with any multiple added
+-- Frames a text is kept (RECENT) and counts as recent (LATELY) after a script was at it.
+local RECENT, LATELY = 3600, 240
+local SHEET = 1024     -- glyph sheet size; sheet positions are taken modulo it
 local ANSWERS_MAX = 8
 
 local function valid(p)
@@ -212,10 +207,9 @@ local function compose_choice(answers)
     return b:text(), slots
 end
 
--- The characters' pictures in the message window, in reading order: { x, y, id } in the
--- picture of 640 by 448; `id` is where the picture is in the game's sheet of characters, the
--- same for the same character. A character is drawn twice, the second a little to the right
--- and below.
+-- The glyphs in the message window in reading order: { x, y, id } in the 640x448 picture;
+-- `id` is the glyph's position in the game's glyph sheet, the same for the same character.
+-- Each character is drawn twice, the shadow slightly right and below.
 local function drawn_glyphs()
     local pool = mem.read(POOL, POOL_END - POOL)
     local things = mem.read(THINGS, THINGS_END - THINGS)
@@ -237,7 +231,7 @@ local function drawn_glyphs()
             end
         end
     end
-    -- Without the shadows.
+    -- Drop the shadows.
     local glyphs = {}
     for _, g in ipairs(found) do
         if not seen[(g[1] - 2) * 1024 + g[2] - 2] then glyphs[#glyphs + 1] = g end
@@ -249,16 +243,15 @@ local function drawn_glyphs()
     return glyphs
 end
 
--- What picture is which character, learnt from the messages that were made out.
+-- Glyph to character, learnt from matched messages.
 local learnt = {}
-local drawn_as = {}   -- and which character is which picture
-local blank          -- the picture of nothing, which a name is set out with
+local drawn_as = {}   -- character to glyph
+local blank          -- the empty glyph that pads names
 
--- Whether the pictures from `start` on can be the first characters of `drawn` (a list of
--- characters, "\n" between rows): the rows breaking where they break, and the same picture
--- wherever the character is the same and only there. Also whether they are all of it, how
--- many pictures there are, how many of them are known to be their characters and how many
--- are known as others.
+-- Whether the glyphs from `start` on can be the first characters of `drawn` (characters,
+-- "\n" between rows): rows break at the same places, and a glyph repeats exactly where its
+-- character does. Also returns whether they cover all of it, the glyph count, and how many
+-- glyphs are known to be their characters and how many are known as others.
 local function fits(drawn, glyphs, start)
     local at = start - 1
     local by_char, by_id = {}, {}
@@ -275,7 +268,7 @@ local function fits(drawn, glyphs, start)
                 complete = false
                 break
             end
-            -- A row begins where the y changes, and nowhere else inside the text.
+            -- A row starts where y changes, and nowhere else inside the text.
             if at > start and (glyphs[at - 1][2] ~= g[2]) ~= first then return false end
             first = false
             if by_char[ch] and by_char[ch] ~= g[3] then return false end
@@ -335,8 +328,8 @@ reader.on_state_loaded(function()
     recent, learnt, drawn_as, blank, last_key, steady_key, resolved = {}, {}, {}, nil, nil, nil, false
 end)
 
--- What the game draws of a text: its characters with "\n" between rows; for a choice the
--- answers that follow the first one, each a row.
+-- What the game draws of a text: its characters with "\n" between rows; for a choice, the
+-- answers after the first, one per row.
 local function drawn_of(address, units)
     local drawn, parsed = {}, nil
     if units[1] == ANSWER_MARK then
@@ -366,7 +359,7 @@ end
 
 reader.on_frame(function()
     local frame = reader.frame()
-    -- Several scripts run at once (one is the scene's); the texts they are at are kept.
+    -- Several scripts run at once (one is the scene's); remember the texts they are at.
     local slots = mem.read(SCRIPTS, SCRIPTS_COUNT * 4)
     if slots and #slots == SCRIPTS_COUNT * 4 then
         for k = 0, SCRIPTS_COUNT - 1 do
@@ -400,23 +393,22 @@ reader.on_frame(function()
     for k, g in ipairs(glyphs) do parts[k] = g[1] * 1024 + g[2] end
     local key = table.concat(parts, ",")
     if key ~= steady_key then
-        -- Other pictures: the places given are no longer true.
+        -- The glyphs changed: withdraw the layouts.
         if next(layouts) then drop() end
         steady_key, steady, resolved = key, 1, false
         return
     end
     steady = steady + 1
-    -- Looked at when the pictures have just stopped, and once more when they have stood for
-    -- longer than any wait inside a message.
+    -- Matched when the glyphs have just settled, and again once they have stood longer than
+    -- any wait inside a message.
     if resolved or (steady ~= STEADY and steady ~= STOOD) then return end
     local stood = steady == STOOD
 
-    -- The pictures have stopped coming (or pause: a message is typed with waits): which of
-    -- the scene's texts is it? One that fits and that a script was at lately, or of whose
-    -- pictures half are known to be its characters and none known as another; of those the
-    -- one with most pictures known.
-    -- A message begins a row, after a name (three pictures) or without one; the window may
-    -- still have the message before it in the rows above.
+    -- The glyphs have settled (or paused at a wait). Candidates: texts that fit and that a
+    -- script was at recently, or with half their glyphs known and none contradicting; the
+    -- one with the most known glyphs wins.
+    -- A message starts a row, after a three-glyph name or without one; the previous message
+    -- may still fill the rows above.
     local starts, named_start = {}, {}
     for k, g in ipairs(glyphs) do
         if k == 1 or glyphs[k - 1][2] ~= g[2] then
@@ -472,12 +464,12 @@ reader.on_frame(function()
             end
         end
     end
-    -- A longer text that fits what is there as well: the message may still be coming.
+    -- A longer text also fits so far: the message may still be coming.
     if best and best.lately == 0 and rival >= best.agree then best = nil end
-    -- Nothing known yet of these pictures, but they have stood, and one text only is all
-    -- there: that is it (this is how the first messages after a start are made out).
+    -- No glyphs known yet, but they have stood and exactly one text fits completely: take it
+    -- (how the first messages after a start are identified).
     if (not best or tie) and stood and alone and not several then best, tie = alone, false end
-    -- Two texts that fit alike: not known which (it is, once more pictures are known).
+    -- Two texts fit equally well: wait until more glyphs are known.
     if not best or tie then return end
     do
         local at = #glyphs - best.count
@@ -505,8 +497,8 @@ reader.on_frame(function()
     if text_key ~= last_key then
         last_key = text_key
         drop()
-        -- The name in front of the message, when its pictures are known: a blank one is in
-        -- the middle of a name of two characters and on both sides of a name of one.
+        -- The speaker's name, once its glyphs are known: a blank glyph sits between the two
+        -- characters of a two-character name and on both sides of a one-character name.
         local speaker
         if best.named and not best.answers then
             local first = #glyphs - best.count - NAME_GLYPHS + 1

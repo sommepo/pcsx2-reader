@@ -4,14 +4,12 @@
 -- reader: version SLPS-25256, disc version 1.01
 -- Never7 -the end of infinity- (KID, PS2, 2003), SLPS-25256. Program 9D260CAF.
 --
--- The game keeps the rows of text it has shown, as it broke them, in a list: a row is added
--- when it has been typed out. When the list is full (999 rows, some time into the first
--- morning) the count stays and every row moves up one place for each new one. A speaker's name is a row of its own that begins with a space.
--- Which row of the text window the last one stands in is a number of the program's, so the
--- rows before it are the ones above. The game has no table of where the characters are; it
--- draws them at a fixed pitch, brackets and commas at half of it (measured in pictures of
--- the game). A choice's answers are in buffers of their own and are drawn the same way,
--- each row centred.
+-- The game keeps every row it has shown, as wrapped, in a list; a row is added once typed
+-- out. When the list is full (999 rows) the count stays and the rows shift up one place per
+-- new row. A speaker's name is a row of its own starting with a space.
+-- A variable gives the window row of the last list row, so the rows before it are the ones
+-- above. Characters are drawn at a fixed pitch, brackets and commas at half of it (measured).
+-- A choice's answers are in their own buffers and drawn the same way, each row centred.
 
 local BUILD = "9D260CAF"
 if reader.build_id ~= BUILD then
@@ -19,7 +17,7 @@ if reader.build_id ~= BUILD then
           "), the game is " .. tostring(reader.build_id))
 end
 
--- Data of the program (it is loaded where it was linked for).
+-- Addresses (the program loads at its link address).
 local ROWS = 0x00599b34        -- the rows shown so far, Shift-JIS, each in a buffer of its own
 local ROW_SIZE = 100
 local ROW_COUNT = 0x00398280   -- how many rows there are
@@ -38,14 +36,13 @@ local PITCH, ROW_PITCH, HEIGHT = 24, 28, 26
 local WIDTH = 576              -- a row is this wide at most
 local HALF = {}                -- characters half as wide as the others
 for _, c in ipairs{ "、", "。", "（", "）", "「", "」", "『", "』" } do HALF[c] = true end
--- A row that ends in one of these ends what is said there; any other goes on in the next.
+-- A row ending in one of these ends a sentence; any other row continues in the next.
 local ENDS = {}
 for _, c in ipairs{ "。", "」", "』", "）", "！", "？", "…", "―", "♪", "～" } do ENDS[c] = true end
 
--- A message is reported when it has been all there for this many frames: what a skip runs
--- through is not read.
+-- Frames a message must stay complete before it is reported; skipped text is not read.
 local SHOWN_FRAMES = 4
--- The text window has this many rows: rows further back than that are no longer shown.
+-- Rows in the text window; older rows are no longer shown.
 local WINDOW_ROWS = 4
 
 local function is_lead(b)
@@ -79,8 +76,8 @@ local function blank(raw)
 end
 
 local reported = nil  -- how many rows had been there when text was last reported
-local tail            -- rows before that (not the last, which may still grow), to follow them
-local TAIL = 3        -- when the full list moves up
+local tail            -- the rows before it (not the last, which may grow), to find them again
+local TAIL = 3        -- after the full list shifts
 local last_row, last_size -- the last row reported, and how many bytes it had then
 local settled_since
 local windows = {}
@@ -105,20 +102,18 @@ local function withdraw()
     windows = {}
 end
 
--- Whether a choice is up: the box the answers stand in is. (A bit of the program's state
--- that is on at a choice is on at the end of many a message as well, and is off when a
--- quiz asks again with the wrong answers taken away.)
+-- A choice is up while the answers' box is.
 local function choosing()
     return (mem.u32(CHOICE_BOX) or 0) ~= 0
 end
 
--- The answers of a choice: one event, an answer to a line.
+-- A choice's answers as one event, one answer per line.
 local function choice()
     local raw = mem.read(ANSWER_TEXT, ANSWER_SIZE * ANSWER_MAX)
     if not raw then return end
     local rows = {}
-    -- The answers stay in their buffers after the choice, and those of an earlier choice
-    -- with more answers after the last: the box says when one is up, the count how many.
+    -- The buffers keep old answers (also from earlier, longer choices): the box says whether a
+    -- choice is up, the count how many answers it has.
     local wanted = choosing() and math.min(mem.u32(ANSWER_COUNT) or 0, ANSWER_MAX) or 0
     for index = 1, wanted do
         local one = raw:sub((index - 1) * ANSWER_SIZE + 1, index * ANSWER_SIZE):match("^[^%z]*")
@@ -161,12 +156,12 @@ reader.on_frame(function(frame)
     local count = mem.u32(ROW_COUNT)
     if not count or count > 100000 then return end
     if reported == nil or count < reported then
-        -- The profile's first frame, or a game begun or loaded: what is there is not new.
+        -- First frame, new game or loaded game: the existing rows are not new.
         reported, last_row, last_size, tail = count, nil, nil, rows_before(count - 1, TAIL)
         withdraw()
         return
     end
-    -- The full list moved up: where the rows reported last are now.
+    -- The full list shifted: find the rows reported last.
     if tail and not same(rows_before(reported - 1, TAIL), tail) then
         local moved
         for by = 1, math.min(reported - 1 - TAIL, 200) do
@@ -176,7 +171,7 @@ reader.on_frame(function(frame)
             end
         end
         if not moved then
-            -- Not found (a game loaded with as many rows): what is there is not new.
+            -- Not found (a loaded game with as many rows): the existing rows are not new.
             reported, last_row, last_size, tail = count, nil, nil, rows_before(count - 1, TAIL)
             withdraw()
             return
@@ -184,13 +179,12 @@ reader.on_frame(function(frame)
         reported = reported - moved
         if last_row then last_row = last_row - moved end
     end
-    -- While a choice is up the message under it counts as typed out, which the game does not
-    -- say then.
+    -- While a choice is up, the message under it counts as typed out (the flag is not set then).
     if mem.u32(SETTLED) ~= 1 and not choosing() then
         settled_since = nil
         return
     end
-    -- The last row with text (the game adds an empty one at times).
+    -- The last row with text (the game sometimes adds an empty one).
     local last = count - 1
     while last >= 0 and last >= count - 3 and blank(row(last)) do last = last - 1 end
     if last < 0 or blank(row(last)) then return end
@@ -203,7 +197,7 @@ reader.on_frame(function(frame)
     if frame - settled_since < SHOWN_FRAMES then return end
     settled_since = nil
 
-    -- New rows, or the last row gone on after a pause in the middle of it.
+    -- New rows, or the last row continued after a mid-row pause.
     local from, skip = reported, 0
     if grown then
         from, skip = last, last_size
@@ -217,8 +211,8 @@ reader.on_frame(function(frame)
     end
     local at_row = mem.u32(WINDOW_ROW) or 0
     if at_row > 7 then at_row = 0 end
-    -- Only what the window shows: rows that went by while the game skipped (or was hurried on
-    -- to its next choice) are not read.
+    -- Only rows the window shows: rows passed while skipping or going to the next choice are
+    -- not read.
     if last - from >= WINDOW_ROWS then
         from, skip, grown = last - math.min(at_row, WINDOW_ROWS - 1), 0, false
     end
