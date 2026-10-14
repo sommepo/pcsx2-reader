@@ -28,6 +28,7 @@
 #include <QPointer>
 #include <QTableWidget>
 #include <QTimer>
+#include <QWindow>
 #include <QTreeWidget>
 #include "reader/qt/host.h"
 #include "reader/core/audio_tap.h"
@@ -159,6 +160,18 @@ void ReaderControl::SendPointer(const QPointF& position, int kind,
                                                        : QEvent::MouseMove;
     const Qt::MouseButton button = kind == PointerMove ? Qt::NoButton : Qt::LeftButton;
     const Qt::MouseButtons buttons = kind == PointerPress ? Qt::LeftButton : Qt::NoButton;
+    // To the game's display surface (a window embedded in the main window's container), where a
+    // real pointer's events arrive and the reader takes them; to the container when no game is
+    // shown.
+    for (QWindow* window : QGuiApplication::allWindows()) {
+        if (window->isVisible() &&
+            QString::fromLatin1(window->metaObject()->className()) == QStringLiteral("DisplaySurface")) {
+            QMouseEvent event(type, QPointF(window->mapFromGlobal(global)), QPointF(global), button,
+                              buttons, modifiers);
+            QCoreApplication::sendEvent(window, &event);
+            return;
+        }
+    }
     QMouseEvent event(type, QPointF(local), QPointF(global), button, buttons, modifiers);
     QCoreApplication::sendEvent(render_window, &event);
 }

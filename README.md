@@ -13,6 +13,12 @@ For Windows (and Linux, built from source). Its Android sibling is
 > report nothing about it there. PCSX2's own README is [README.pcsx2.md](README.pcsx2.md).
 > The reading layer's code is AI-written; nothing from here is to be sent upstream.
 
+<p align="center">
+  <img src="docs/reader/media/lookup-demo.gif" width="720" alt="ひぐらしのなく頃に祭: three words of a line are clicked in turn, and a popup with each one's dictionary entries opens above the text">
+  <br>
+  <sub>ひぐらしのなく頃に祭 カケラ遊び: click a word in the game's own text box. Inflected words are traced back to their dictionary form.</sub>
+</p>
+
 ## What it does
 
 - **Look words up in the game's picture.** A word in a text box is real text: click it and a
@@ -27,6 +33,21 @@ For Windows (and Linux, built from source). Its Android sibling is
   window of the reader wears its colours.
 - It only does this for **games that have a game script** (below). Every other game runs as
   in PCSX2.
+
+## What it looks like
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/reader/media/lookup.jpg" alt="A popup with the entries of 迎える above the clicked word 迎えて in the game's text box"><br><sub><b>A lookup.</b> 迎えて is looked up as 迎える; the popup stands over the game, which stays as it is.</sub></td>
+    <td width="50%"><img src="docs/reader/media/game-scripts.png" alt="The Game scripts window: the games of the published list, each with what its script reads and whether it is installed"><br><sub><b>Game scripts.</b> The published list, with Install, Update and Remove.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/reader/media/menu.png" alt="The PS2-style main menu: Browser and System Configuration beside glowing lights"><br><sub><b>The PS2's own menu</b> in place of the game list.</sub></td>
+    <td><img src="docs/reader/media/browser.png" alt="The Browser with a game marked by a book badge"><br><sub><b>The Browser.</b> A book marks a game with a script.</sub></td>
+  </tr>
+</table>
+
+<sub>Pictures of the app on Linux (the same app as the Windows package), with the dictionary JMdict. A CRT picture setting is also there: the [ARMSX2 Reader README](https://github.com/sommepo/armsx2-reader#what-it-looks-like) shows it.</sub>
 
 ## Get it
 

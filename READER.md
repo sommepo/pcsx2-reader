@@ -86,7 +86,8 @@ memory card notice comes up; paused at the maintainer's word before its text was
 - **Commits say `(AI-assisted)`**, as upstream's guide asks of every message.
 - **No game data, no BIOS, in Git, ever.** Discs, the console's BIOS, anything extracted or
   derived from them, savestates, screenshots: under `private/`, which Git ignores. A bundled
-  profile holds addresses and decoding logic only. Tests use made-up text.
+  profile holds addresses and decoding logic only. Tests use made-up text. The one exception,
+  by the maintainer's word: the README's pictures and animations in `docs/reader/media`.
 - **A table made from a game is game data too** (a font's character table, as the two
   ペルソナ, 真・女神転生III and DIGITAL DEVIL SAGA need): it is `private/<game>/<SERIAL>.charset`, the profile asks for it with
   `reader.data("charset")`, and `tools/reader/private-data.sh`, which the build scripts call,
@@ -190,6 +191,11 @@ made-up games, `home-grab` writes a picture of it; `action reader_settings`, `di
 `dialog-select TEXT` makes a list's row current). `READER_DESKTOP_HOME` gives a run a home of
 its own (and `desktop-stop.sh` stops only the run of that home), `READER_DESKTOP_BUILD` a
 build folder of its own: two agents can each build and run without stepping on the other.
+`click`, `move`, `press` and `release` go to the game's display surface (a window embedded in
+the main window's container), where a real pointer's events arrive; with
+`READER_OVERLAY_UNMANAGED=1` the popup and the audio question are kept from the window manager
+as the layer is, so under `screen.sh` they stand where the reader puts them. `grab` composes
+the game's frame (before presentation: no CRT picture in it), the layer and the popup.
 
 ### A game, with a picture
 
@@ -360,7 +366,9 @@ A profile holds addresses and decoding logic for one disc and refuses any other 
 
 **ひぐらしのなく頃に祭 カケラ遊び** (`SLPM-66913.lua`, program C08A36F0, disc version 1.01).
 The game keeps its script in memory whole and lays a message out once, into a list with a
-place and a moment for every character; the profile reads the message being shown and that
+place and a moment for every character (in a scene object the game allocates, which the profile
+finds through the program's pointer to it: its place moves between runs, by 16 bytes once
+autosave is switched on, 2026-10-14); the profile reads the message being shown and that
 list, and reports each part between two waits when it has come up in full. The file's
 comments have the format. Seen in the first chapter's opening: narration, lines with a
 speaker, a message in several parts, words with furigana, the cells on their characters.

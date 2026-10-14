@@ -34,7 +34,12 @@ QString ButtonStyle(const QColor& colour, int pixels, int pad_x, int pad_y) {
 
 AudioPrompt::AudioPrompt(QWidget* parent)
     : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus |
-                          Qt::NoDropShadowWindowHint) {
+                          Qt::NoDropShadowWindowHint |
+                          // As the layer over the game (reader_overlay.cpp): kept from the window
+                          // manager with READER_OVERLAY_UNMANAGED=1, so it stands where it is put.
+                          (qEnvironmentVariableIntValue("READER_OVERLAY_UNMANAGED") != 0
+                               ? Qt::X11BypassWindowManagerHint
+                               : Qt::WindowFlags())) {
     setAttribute(Qt::WA_ShowWithoutActivating);
     setFocusPolicy(Qt::NoFocus);
     QFont base = font();

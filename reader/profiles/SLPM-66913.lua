@@ -21,13 +21,17 @@ if reader.build_id ~= BUILD then
 end
 
 -- Addresses (the program loads at its link address).
-local MESSAGE_TEXT = 0x002ba074  -- pointer to the string of the message being shown, in the script
 local KANA_TABLE = 0x00245598    -- 64 Shift-JIS characters, for the bytes 0xA0 to 0xDF
-local BOX_LEFT = 0x002baf84      -- the text box in the picture: left, top, right, bottom
-local BOX_TOP = 0x002baf88
-local GLYPHS = 0x002bafa8        -- pointer to the list of characters
-local GLYPHS_END = 0x002bafac    -- pointer to the list's end
-local CLOCK = 0x002bb01c         -- milliseconds of the message shown so far
+-- The message state is part of the scene object, which the game allocates: its address
+-- varies between runs (by 16 bytes once autosave is switched on), so it is read from the
+-- program's pointer to it and the fields are offsets into it.
+local SCENE = 0x0025b264         -- pointer to the scene object
+local MESSAGE_TEXT = 0xcd4       -- pointer to the string of the message being shown, in the script
+local BOX_LEFT = 0x1be4          -- the text box in the picture: left, top, right, bottom
+local BOX_TOP = 0x1be8
+local GLYPHS = 0x1c08            -- pointer to the list of characters
+local GLYPHS_END = 0x1c0c        -- pointer to the list's end
+local CLOCK = 0x1c7c             -- milliseconds of the message shown so far
 local ENTRY = 52                 -- bytes to an entry: at +4 left, top, right, bottom (floats,
                                  -- in the box), at +44 the moment it comes up, at +48 how
                                  -- far the next character is (a float)
@@ -38,6 +42,13 @@ local SMALL = 15                 -- an entry lower than this is a character of a
 local SHOWN_FRAMES = 4
 
 local kana -- the table's characters as UTF-8, by byte
+
+-- A u32 field of the scene object; nil while there is none.
+local function field(offset)
+    local scene = mem.u32(SCENE)
+    if not scene or scene < 0x00100000 or scene >= 0x02000000 then return nil end
+    return mem.u32(scene + offset)
+end
 local function load_kana()
     local raw = mem.read(KANA_TABLE, 128)
     if not raw or #raw < 128 then return false end
@@ -161,7 +172,7 @@ end
 -- { left, top, width, height, moment }. nil when the list's length does not match the message
 -- (the list belongs to another message).
 local function entries(first, last, total)
-    local list, stop = mem.u32(GLYPHS), mem.u32(GLYPHS_END)
+    local list, stop = field(GLYPHS), field(GLYPHS_END)
     if not list or not stop or list == 0 or stop <= list then return nil end
     local size = stop - list
     if size > 400 * ENTRY or size % ENTRY ~= 0 then return nil end
@@ -189,7 +200,7 @@ end
 
 reader.on_frame(function(frame)
     if not kana and not load_kana() then return end
-    local pointer = mem.u32(MESSAGE_TEXT)
+    local pointer = field(MESSAGE_TEXT)
     if pointer ~= current then
         current = pointer
         withdraw()
@@ -228,7 +239,7 @@ reader.on_frame(function(frame)
         end
     end
     local list = entries(first, first + count - 1, total)
-    local clock = mem.u32(CLOCK)
+    local clock = field(CLOCK)
     if not list or not clock then return end
     if clock < list[#list][5] then
         complete_since = nil
@@ -238,7 +249,7 @@ reader.on_frame(function(frame)
     if frame - complete_since < SHOWN_FRAMES then return end
 
     -- The part is complete: report its text, readings and a cell per character.
-    local left, top = mem.u32(BOX_LEFT) or 45, mem.u32(BOX_TOP) or 292
+    local left, top = field(BOX_LEFT) or 45, field(BOX_TOP) or 292
     local b = reader.builder()
     local cells, ruby = {}, {}
     local starts = {} -- where each piece begins in the text

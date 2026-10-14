@@ -58,7 +58,12 @@ bool IsFormsList(const TermEntry& entry) {
 
 LookupPopup::LookupPopup(QWidget* parent)
     : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus |
-                          Qt::NoDropShadowWindowHint) {
+                          Qt::NoDropShadowWindowHint |
+                          // As the layer over the game (reader_overlay.cpp): kept from the window
+                          // manager with READER_OVERLAY_UNMANAGED=1, so it stands where it is put.
+                          (qEnvironmentVariableIntValue("READER_OVERLAY_UNMANAGED") != 0
+                               ? Qt::X11BypassWindowManagerHint
+                               : Qt::WindowFlags())) {
     setAttribute(Qt::WA_ShowWithoutActivating);
     setFocusPolicy(Qt::NoFocus);
     setMouseTracking(true);
