@@ -13,6 +13,16 @@
       "sha256": "31a761a121d94d20e3fff2c536027d8daef5677aabaa33c67f91b3ca5568f939"
     },
     {
+      "id": "SLPM-65320",
+      "title": "EVE burst error PLUS",
+      "reads": "The message window: what is said and told, part by part as it comes up in full",
+      "version": "SLPM-65320, disc version 1.02",
+      "api": 1,
+      "file": "SLPM-65320.lua",
+      "size": 7486,
+      "sha256": "2bbd80c57b8f68c7a557fbe5dff120e8d65d1ce5e530f3a6a8cafa3853016130"
+    },
+    {
       "id": "SLPM-65421",
       "title": "Ever17 -the out of infinity- Premium Edition",
       "reads": "The story's text with speakers, each message as it has come up in full, and choices",
@@ -53,6 +63,16 @@
       "sha256": "57df74657a9a09f5f079737753cd7a48b23d2a6f8d626412c9bac54b58e26cb5"
     },
     {
+      "id": "SLPS-25041",
+      "title": "シャドウハーツ",
+      "reads": "The message windows of scenes and talk, with the speaker's name",
+      "version": "SLPS-25041, disc version 1.02",
+      "api": 1,
+      "file": "SLPS-25041.lua",
+      "size": 6731,
+      "sha256": "37e1b0903de6efb052b10a662bafc20d855e71d25a0ce1ccd0288eb710c9c649"
+    },
+    {
       "id": "SLPS-25256",
       "title": "Never7 -the end of infinity-",
       "reads": "The story's text with speakers, each message as it has come up in full, and choices",
@@ -61,6 +81,16 @@
       "file": "SLPS-25256.lua",
       "size": 10707,
       "sha256": "74e0e899a6de8052e096ebc346e4e5490c69ab64691374313c8dfed318d4f30c"
+    },
+    {
+      "id": "SLPS-25679",
+      "title": "うたわれるもの 散りゆく者への子守唄",
+      "reads": "The message window: what is said and told, with the speaker's name",
+      "version": "SLPS-25679, disc version 1.04",
+      "api": 1,
+      "file": "SLPS-25679.lua",
+      "size": 6023,
+      "sha256": "4e99329cc1cf0385a358cffc41232a7e2f97a2403f25fb4b4c682fc0ee434b73"
     },
     {
       "id": "SLPS-25918",

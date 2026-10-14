@@ -11,7 +11,7 @@ same look.
 fork's. If a file `MAINTAINER.md` exists (the maintainer's own checkout), read it after this
 one.
 
-## State (2026-10-14): the interface, eleven games, a Windows build nobody has run
+## State (2026-10-14): the interface, fourteen games, a Windows build nobody has run
 
 **What is there** is the app's face and the reader's windows: the PS2-style menu in place of
 the game list, the console's colours in every window, the reader's menu and its windows
@@ -19,11 +19,12 @@ the game list, the console's colours in every window, the reader's menu and its 
 layer over the game's picture, and under them a text engine that loads a game's profile and
 runs it once a frame.
 
-**Eleven games can be read**: ひぐらしのなく頃に祭 カケラ遊び (SLPM-66913), Remember11
+**Fourteen games can be read**: ひぐらしのなく頃に祭 カケラ遊び (SLPM-66913), Remember11
 (SLPM-65550), Ever17 Premium Edition (SLPM-65421), Never7 (SLPS-25256), ペルソナ4
 (SLPM-66978), and since 2026-10-14 ペルソナ3 (SLPM-66445), ドラゴンクエストV (SLPM-65555),
 サイレントヒル2 (SLPM-65051), 真・女神転生III マニアクス (SLPM-65462), DIGITAL DEVIL
-SAGA (SLPM-65597) and アマガミ (SLPS-25918). The two ペルソナ, 真・女神転生III and DIGITAL DEVIL SAGA each need a
+SAGA (SLPM-65597), アマガミ (SLPS-25918), EVE burst error PLUS (SLPM-65320), うたわれるもの
+散りゆく者への子守唄 (SLPS-25679) and シャドウハーツ (SLPS-25041). The two ペルソナ, 真・女神転生III and DIGITAL DEVIL SAGA each need a
 character table that is not in Git (see "Games"). See "Games" below for what of each is read
 and what is not.
 
@@ -32,6 +33,11 @@ and what is not.
 neither keeps its text in Shift-JIS or in any order of characters that follows it, and the
 text on the screen (a menu's help) was not found in memory by its shape either, in one
 byte or two a character. Nothing more is known of their formats.
+ウォレスとグルミット 野菜畑で大ピンチ！ (SLPM-66327, program 3C38D7E1) keeps its text in UTF-16,
+but here its films draw black and silent and after the opening one the game goes back to its
+title (also with the Skip MPEG game fix), so no text of the game proper was reached; set
+aside at the maintainer's word. バイオハザード4 (SLPM-66213, program 60FA8C69) starts and its
+memory card notice comes up; paused at the maintainer's word before its text was looked for.
 
 **A Windows build** is made on Linux (`tools/reader/build-windows.sh`,
 `package-windows.sh`). It was never started: see "Windows".
@@ -539,6 +545,48 @@ game's topics. **Not looked at**: anything past the first classroom scene, a loa
 skipping, what the profile costs on a slow device (it reads some 250 KB of memory every
 fourth frame while a message is up).
 
+**EVE burst error PLUS** (`SLPM-65320.lua`, program 8EC6655D). Plain Shift-JIS. The game
+copies a message into a buffer of its own (its parts with a NUL between them; an `s` before
+the NUL is the script's wait) and puts what the window shows into a text object: how many
+characters are up and the characters, one 32-bit number each (the code's bytes the other way
+round). A word beside it is 1 while the window waits for the button, but only once a voice is
+over, so a part is also taken when as many characters are up as the message has to a part's
+end. The speaker is the name in 【】 at the message's front. The object has no places: the
+profile sets 23 characters to a row, later rows in by one, with the game's breaking rules (a
+、 or 。 that would be the 24th hangs out of the row; ‥, closing brackets and small kana do
+not begin one), all measured in pictures.
+Seen from a new game through the office and Akane's visit (some 90 messages): narration,
+speakers, voiced lines, messages in parts, the cells on their characters.
+**Not looked at**: the investigation's command menus (見る, 話す...) and choices, the second
+scenario (まりな), a loaded save, skipping.
+
+**うたわれるもの 散りゆく者への子守唄** (`SLPS-25679.lua`, program BF9554BE). Plain
+Shift-JIS. When a message comes up the game lays it out once into a list, 24 bytes a
+character: its code, where it stands in the box, how wide it is; so the cells are the game's
+own. The speaker's name is a string of its own (empty while nobody is named). A reading is
+written `[word*reading]` in the script, which the game keeps beside the list: the profile
+takes the readings from there. The game's long dash (its own code 0x875B) is reported as ―.
+A message is reported when its list has stood for four frames.
+Seen from a new game through the prologue and the first scenes with Eruruu (some 45
+messages): told and spoken text, speakers, a reading over a kanji, messages of two rows, the
+cells on their characters.
+**Not looked at**: the strategy battles and their text, choices, the menus, a loaded save,
+skipping.
+
+**シャドウハーツ** (`SLPS-25041.lua`, program 3E46A5F0). Plain Shift-JIS with commands of
+three bytes that begin with `%`. Every window is an object kept by a window keeper; the
+keepers are a chain that begins at a fixed place, and a keeper of message windows is told by
+its first word. Each row of a message is a window of its own, linked to the next, with how
+far below the first it stands, its text, a list of where each character stands and a state
+that says whether the row is still being typed. The keeper has where the window is. A
+speaker's name is a window whose text begins with `%t`. A message is reported when all its
+rows are typed and nothing has changed for ten frames (the next row begins two frames after
+one is done); one that goes on after a pause reports only what is new.
+Seen from a new game through the train, the fight on its roof and the woods after it (some
+45 messages): speakers, messages of one to three rows, the cells on their characters.
+**Not read**: battles' help and menus (other keepers), the opening film's captions (part of
+the film). **Not looked at**: choices, shops, a loaded save.
+
 ## Windows
 
 Upstream supports Microsoft's compiler (or clang-cl) on Windows and nothing else, with its
@@ -594,8 +642,8 @@ Windows computer. That it links and that its imports are satisfied is all that i
 - **ペルソナ4 on Linux, drawn in software** (2026-10-13): as its paragraph under "Games"
   says. The picture of a game for a card or for the harness (`grab`) is now taken on the
   emulator's own thread: taken beside it, it hung for good in this game's 3D scenes.
-- **Five more games on Linux, drawn in software** (2026-10-14): as their paragraphs under
-  "Games" say; each profile written against the running game, its reports read against
+- **Five more games on Linux, drawn in software** (2026-10-14), and then EVE burst error
+  PLUS, うたわれるもの and シャドウハーツ: as their paragraphs under "Games" say; each profile written against the running game, its reports read against
   pictures of the game and its cells drawn over one.
 - **Not seen**: a word clicked in the game and looked up (no dictionary was installed in
   the test folder); a card; a real games folder in the Browser beyond the one game;
