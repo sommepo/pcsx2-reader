@@ -89,6 +89,18 @@ TEST_CASE("Catalog: every bundled profile says its game, what is read and for wh
     }
 }
 
+TEST_CASE("Settings: pointing at a word looks it up unless switched off", "[reader][settings]") {
+    QTemporaryDir folder;
+    ReaderSettings settings(folder.filePath(QStringLiteral("reader.ini")));
+    REQUIRE(settings.HoverLookup() == QStringLiteral("always"));
+    settings.SetValue(ReaderSettings::KeyHoverLookup, QStringLiteral("shift"));
+    REQUIRE(settings.HoverLookup() == QStringLiteral("shift"));
+    settings.SetValue(ReaderSettings::KeyHoverLookup, QStringLiteral("off"));
+    REQUIRE(settings.HoverLookup() == QStringLiteral("off"));
+    settings.SetValue(ReaderSettings::KeyHoverLookup, QStringLiteral("nonsense"));
+    REQUIRE(settings.HoverLookup() == QStringLiteral("always"));
+}
+
 TEST_CASE("Settings: where the saves are kept is a choice, and an older setup is kept",
           "[reader][settings]") {
     QTemporaryDir folder;

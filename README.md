@@ -16,8 +16,8 @@ For Windows. The Android version is [ARMSX2 Reader](https://github.com/sommepo/a
 
 ## Features
 
-- **Look up words in the game's text.** Point at a word to see its entry (hold Shift, or set
-  it to always in Reader settings). Clicking a word works too. Uses Yomitan dictionaries.
+- **Look up words in the game's text.** Point at a word to see its entry. Clicking a word
+  works too. Uses Yomitan dictionaries.
 - **Anki cards** with the sentence and a picture of the scene, through AnkiConnect.
 - **Backlog and reading statistics.**
 - **Go on to the next choice**: run a visual novel at full speed to its next choice.
