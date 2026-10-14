@@ -125,3 +125,8 @@ CMakeSettings.json
 /ci-artifacts/
 /out/
 /.cache/
+
+# Reader fork: games, harness folders, screenshots and notes of this machine.
+/private/
+# A profile's data made from its game (tools/reader/private-data.sh copies it in for a build).
+/reader/profiles/*.charset

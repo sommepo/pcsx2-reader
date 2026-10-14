@@ -29,6 +29,12 @@ layout(push_constant) uniform cb10
 	vec2 u_source_resolution;
 	vec2 u_rcp_source_resolution; // 1 / u_source_resolution
 	float u_time;
+	// Reader fork: the rest of DisplayConstantBuffer, read by ps_reader_crt alone.
+	float u_reader0;
+	float u_reader1;
+	float u_reader2;
+	vec4 u_reader3;
+	vec4 u_reader4;
 };
 
 layout(location = 0) in vec2 v_tex;

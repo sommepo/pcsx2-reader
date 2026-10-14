@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "ImGui/FullscreenUI.h"
+#include "reader/core/crt.h" // Reader fork
 #include "ImGui/ImGuiManager.h"
 #include "GS/Renderers/Common/GSRenderer.h"
 #include "GS/GSCapture.h"
@@ -37,6 +38,14 @@ static constexpr std::array<PresentShader, 8> s_tv_shader_indices = {
 	PresentShader::DIAGONAL_FILTER, PresentShader::TRIANGULAR_FILTER,
 	PresentShader::COMPLEX_FILTER, PresentShader::LOTTES_FILTER,
 	PresentShader::SUPERSAMPLE_4xRGSS, PresentShader::SUPERSAMPLE_AUTO};
+
+// Reader fork: with the CRT picture on (reader/core/crt.h), its shader puts the frame on the
+// screen, whatever TV shader the settings name; it wants the frame smoothed.
+static PresentShader ReaderPresentShader()
+{
+	Reader::Crt::SetNativeLines(448);
+	return Reader::Crt::Enabled() ? PresentShader::READER_CRT : s_tv_shader_indices[GSConfig.TVShader];
+}
 
 static std::deque<std::thread> s_screenshot_threads;
 static std::mutex s_screenshot_threads_mutex;
@@ -695,7 +704,7 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 				const float shader_time = static_cast<float>(Common::Timer::ConvertValueToSeconds(current_time - m_shader_time_start));
 
 				g_gs_device->PresentRect(current, src_uv, nullptr, draw_rect,
-					s_tv_shader_indices[GSConfig.TVShader], shader_time, BilnIf(GSConfig.LinearPresent != GSPostBilinearMode::Off));
+					ReaderPresentShader(), shader_time, BilnIf(GSConfig.LinearPresent != GSPostBilinearMode::Off || Reader::Crt::Enabled()));
 			}
 
 			EndPresentFrame();
@@ -973,7 +982,7 @@ void GSRenderer::PresentCurrentFrame()
 			const float shader_time = static_cast<float>(Common::Timer::ConvertValueToSeconds(current_time - m_shader_time_start));
 
 			g_gs_device->PresentRect(current, src_uv, nullptr, draw_rect,
-				s_tv_shader_indices[GSConfig.TVShader], shader_time, BilnIf(GSConfig.LinearPresent != GSPostBilinearMode::Off));
+				ReaderPresentShader(), shader_time, BilnIf(GSConfig.LinearPresent != GSPostBilinearMode::Off || Reader::Crt::Enabled()));
 		}
 
 		EndPresentFrame();

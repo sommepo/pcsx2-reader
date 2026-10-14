@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "common/CocoaTools.h"
+#include "reader/core/emulator.h" // Reader fork
 #include "common/FileSystem.h"
 #include "common/Path.h"
 #include "common/SettingsInterface.h"
@@ -146,6 +147,10 @@ void SettingInfo::CopyValue(SettingsInterface* dest_si, const SettingsInterface&
 			break;
 	}
 }
+
+// Reader fork: a folder of its own, so that the app runs beside a PCSX2 on the same computer
+// and neither touches the other's files.
+static constexpr const char* READER_DATA_FOLDER = "PCSX2Reader";
 
 namespace EmuFolders
 {
@@ -2086,6 +2091,13 @@ std::string Pcsx2Config::FullpathToBios() const
 
 std::string Pcsx2Config::FullpathToMcd(uint slot) const
 {
+	// Reader fork: while a game runs, the first slot holds that game's own card (save sync).
+	if (slot == 0)
+	{
+		std::string own = Reader::Emu::MemoryCardOverride();
+		if (!own.empty())
+			return own;
+	}
 	return Path::Combine(EmuFolders::MemoryCards, Mcd[slot].Filename);
 }
 
@@ -2217,7 +2229,7 @@ bool EmuFolders::SetDataDirectory(Error* error)
 			if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, NULL, &documents_directory)))
 			{
 				if (std::wcslen(documents_directory) > 0)
-					DataRoot = Path::Combine(StringUtil::WideStringToUTF8String(documents_directory), "PCSX2");
+					DataRoot = Path::Combine(StringUtil::WideStringToUTF8String(documents_directory), READER_DATA_FOLDER);
 				CoTaskMemFree(documents_directory);
 			}
 #elif defined(__linux__) || defined(__FreeBSD__)
@@ -2225,7 +2237,7 @@ bool EmuFolders::SetDataDirectory(Error* error)
 			const char* xdg_config_home = getenv("XDG_CONFIG_HOME");
 			if (xdg_config_home && Path::IsAbsolute(xdg_config_home))
 			{
-				DataRoot = Path::RealPath(Path::Combine(xdg_config_home, "PCSX2"));
+				DataRoot = Path::RealPath(Path::Combine(xdg_config_home, READER_DATA_FOLDER));
 			}
 			else
 			{
@@ -2238,7 +2250,7 @@ bool EmuFolders::SetDataDirectory(Error* error)
 					if (!FileSystem::DirectoryExists(config_dir.c_str()))
 						FileSystem::CreateDirectoryPath(config_dir.c_str(), false);
 
-					DataRoot = Path::RealPath(Path::Combine(config_dir, "PCSX2"));
+					DataRoot = Path::RealPath(Path::Combine(config_dir, READER_DATA_FOLDER));
 				}
 			}
 #elif defined(__APPLE__)
@@ -2249,7 +2261,7 @@ bool EmuFolders::SetDataDirectory(Error* error)
 #endif
 			}
 			else // Otherwise use the custom path provided by the user
-				DataRoot = Path::RealPath(Path::Combine(EmuConfig.CustomDataPath, "PCSX2"));
+				DataRoot = Path::RealPath(Path::Combine(EmuConfig.CustomDataPath, READER_DATA_FOLDER));
 		}
 
 	// Couldn't determine the data directory, or using portable mode? fallback to portable.

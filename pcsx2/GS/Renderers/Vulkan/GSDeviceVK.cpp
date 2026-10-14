@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS/GS.h"
+#include "reader/render/crt_present.h" // Reader fork
 #include "GS/GSGL.h"
 #include "GS/GSPerfMon.h"
 #include "GS/GSUtil.h"
@@ -3062,6 +3063,8 @@ void GSDeviceVK::PresentRect(GSTexture* sTex, const GSVector4& sRect, GSTexture*
 	cb.SetSource(sRect, sTex->GetSize());
 	cb.SetTarget(dRect, dTex ? dTex->GetSize() : GSVector2i(GetWindowWidth(), GetWindowHeight()));
 	cb.SetTime(shaderTime);
+	if (shader == PresentShader::READER_CRT) // Reader fork
+		cb.SetReaderCrt(sRect, sTex->GetSize(), dRect);
 	SetUtilityPushConstants(&cb, sizeof(cb));
 
 	DoStretchRect(static_cast<GSTextureVK*>(sTex), sRect, static_cast<GSTextureVK*>(dTex), dRect,
@@ -4306,12 +4309,13 @@ bool GSDeviceVK::CompilePresentPipelines()
 	if (m_swap_chain_render_pass == VK_NULL_HANDLE)
 		return false;
 
-	const std::optional<std::string> shader = ReadShaderSource("shaders/vulkan/present.glsl");
+	std::optional<std::string> shader = ReadShaderSource("shaders/vulkan/present.glsl");
 	if (!shader)
 	{
 		Host::ReportErrorAsync("GS", "Failed to read shaders/vulkan/present.glsl.");
 		return false;
 	}
+	*shader += ReaderCrtPresent::Source(ReaderCrtPresent::Language::Vulkan); // Reader fork
 
 	VkShaderModule vs = GetUtilityVertexShader(*shader);
 	if (vs == VK_NULL_HANDLE)

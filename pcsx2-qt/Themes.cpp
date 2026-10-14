@@ -7,6 +7,7 @@
 #include "pcsx2/Host.h"
 
 #include "common/Path.h"
+#include "reader/qt/install.h" // Reader fork
 
 #include <QtCore/QFile>
 #include <QtGui/QPalette>
@@ -52,6 +53,8 @@ void QtHost::UpdateApplicationTheme()
 
 	SetStyleFromSettings();
 	SetIconThemeFromStyle();
+	// Reader fork: the PS2's colours over the chosen theme, unless switched off in the Reader menu.
+	ReaderUi::ApplyLook(nullptr);
 
 	// Qt generates tinted versions of icons and stores them in QPixmapCache
 	// The key used does not seem to include the theme (or tint colour).

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS/Renderers/Common/GSDevice.h"
+#include <cstring>
+#include "reader/render/crt_present.h" // Reader fork
 #include "GS/GSGL.h"
 #include "GS/GS.h"
 #include "GS/GSUtil.h"
@@ -62,6 +64,15 @@ const char* ShaderEntryPoint(ShaderConvert value)
 	}
 }
 
+// Reader fork
+void DisplayConstantBuffer::SetReaderCrt(const GSVector4& sRect, const GSVector2i& sSize, const GSVector4& dRect)
+{
+	static_assert(sizeof(DisplayConstantBuffer) == sizeof(float) * 32);
+	float values[32];
+	ReaderCrtPresent::Constants(values, sRect.F32, sSize.x, sSize.y, dRect.z - dRect.x, dRect.w - dRect.y);
+	std::memcpy(static_cast<void*>(this), values, sizeof(values));
+}
+
 const char* ShaderEntryPoint(PresentShader value)
 {
 	switch (value)
@@ -75,6 +86,7 @@ const char* ShaderEntryPoint(PresentShader value)
 		case PresentShader::LOTTES_FILTER:      return "ps_filter_lottes";
 		case PresentShader::SUPERSAMPLE_4xRGSS: return "ps_4x_rgss";
 		case PresentShader::SUPERSAMPLE_AUTO:   return "ps_automagical_supersampling";
+		case PresentShader::READER_CRT:         return "ps_reader_crt"; // Reader fork
 		// clang-format on
 		default:
 			pxAssert(0);

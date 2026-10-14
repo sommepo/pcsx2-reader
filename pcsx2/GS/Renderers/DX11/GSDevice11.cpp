@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS.h"
+#include "reader/render/crt_present.h" // Reader fork
 #include "GS/GSGL.h"
 #include "GSDevice11.h"
 #include "GS/Renderers/DX11/D3D.h"
@@ -265,6 +266,10 @@ bool GSDevice11::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 	shader = ReadShaderSource("shaders/dx11/present.fx");
 	if (!shader.has_value())
 		return false;
+	// Reader fork: the CRT picture's shader is built from a text of its own (the file's and
+	// the reader's after it), so that nothing the reader adds can keep the others from
+	// being built. Needs proper testing: Direct3D was never run with it.
+	const std::string reader_shader = *shader + ReaderCrtPresent::Source(ReaderCrtPresent::Language::HLSL);
 	if (!m_shader_cache.GetVertexShaderAndInputLayout(m_dev.get(), m_present.vs.put(), m_present.il.put(),
 			il_convert, std::size(il_convert), *shader, nullptr, "vs_main"))
 	{
@@ -273,7 +278,14 @@ bool GSDevice11::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 
 	for (size_t i = 0; i < std::size(m_present.ps); i++)
 	{
-		m_present.ps[i] = m_shader_cache.GetPixelShader(m_dev.get(), *shader, nullptr, ShaderEntryPoint(static_cast<PresentShader>(i)));
+		const bool reader_crt = static_cast<PresentShader>(i) == PresentShader::READER_CRT; // Reader fork
+		m_present.ps[i] = m_shader_cache.GetPixelShader(m_dev.get(), reader_crt ? reader_shader : *shader, nullptr, ShaderEntryPoint(static_cast<PresentShader>(i)));
+		if (!m_present.ps[i] && reader_crt)
+		{
+			// Reader fork: without its shader the CRT picture is the plain one.
+			Console.Warning("Reader: the CRT shader was not built; the picture is shown without it");
+			m_present.ps[i] = m_present.ps[static_cast<int>(PresentShader::COPY)];
+		}
 		if (!m_present.ps[i])
 			return false;
 	}
@@ -1691,6 +1703,8 @@ void GSDevice11::PresentRect(GSTexture* sTex, const GSVector4& sRect, GSTexture*
 	cb.SetSource(sRect, sTex->GetSize());
 	cb.SetTarget(dRect, ds);
 	cb.SetTime(shaderTime);
+	if (shader == PresentShader::READER_CRT) // Reader fork
+		cb.SetReaderCrt(sRect, sTex->GetSize(), dRect);
 	UpdateSubresource(m_present.ps_cb.get(), &cb, &m_present.cb_uniforms, sizeof(cb));
 
 	// om

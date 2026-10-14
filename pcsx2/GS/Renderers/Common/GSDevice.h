@@ -78,6 +78,7 @@ enum class PresentShader
 	LOTTES_FILTER,
 	SUPERSAMPLE_4xRGSS,
 	SUPERSAMPLE_AUTO,
+	READER_CRT, // Reader fork: the CRT picture (reader/render/crt_present.h)
 	Count
 };
 
@@ -589,6 +590,11 @@ struct alignas(16) DisplayConstantBuffer
 	GSVector2 RcpSourceResolution; // +72,zw
 	GSVector4 TimeAndPad; // seconds since GS init +76,xyzw
 	// +96
+	// Reader fork: two more vectors, so that the constants can hold the CRT picture's 32
+	// numbers in place of the above (SetReaderCrt, for PresentShader::READER_CRT alone).
+	GSVector4 Reader3;
+	GSVector4 Reader4;
+	// +128
 
 	// assumes that sRect is normalized
 	void SetSource(const GSVector4& sRect, const GSVector2i& sSize)
@@ -609,8 +615,10 @@ struct alignas(16) DisplayConstantBuffer
 	{
 		TimeAndPad = GSVector4(time);
 	}
+	// Reader fork: for PresentShader::READER_CRT, in place of everything set above.
+	void SetReaderCrt(const GSVector4& sRect, const GSVector2i& sSize, const GSVector4& dRect);
 };
-static_assert(sizeof(DisplayConstantBuffer) == 96, "DisplayConstantBuffer is correct size");
+static_assert(sizeof(DisplayConstantBuffer) == 128, "DisplayConstantBuffer is correct size");
 
 struct alignas(16) MergeConstantBuffer
 {

@@ -26,6 +26,12 @@ cbuffer cb0 : register(b0)
 	float2 u_source_resolution;
 	float2 u_rcp_source_resolution; // 1 / u_source_resolution
 	float u_time;
+	// Reader fork: the rest of DisplayConstantBuffer, read by ps_reader_crt alone.
+	float u_reader0;
+	float u_reader1;
+	float u_reader2;
+	float4 u_reader3;
+	float4 u_reader4;
 };
 
 Texture2D Texture;

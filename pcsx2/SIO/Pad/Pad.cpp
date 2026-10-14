@@ -17,6 +17,7 @@
 #include "IconsFontAwesome.h"
 
 #include "VMManager.h"
+#include "reader/core/emulator.h" // Reader fork
 #include "common/Assertions.h"
 #include "common/Console.h"
 #include "common/FileSystem.h"
@@ -548,6 +549,8 @@ void Pad::SetControllerState(u32 controller, u32 bind, float value)
 	if (controller >= NUM_CONTROLLER_PORTS)
 		return;
 
+	// Reader fork: a press of the player's ends a run to the next choice.
+	Reader::Emu::OnPadInput(controller, bind, value);
 	s_controllers[controller]->Set(bind, value);
 }
 

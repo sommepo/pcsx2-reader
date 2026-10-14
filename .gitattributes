@@ -6,3 +6,4 @@
 *.props text eol=crlf
 *.vcxproj text eol=crlf
 *.vcxproj.filters text eol=crlf
+MAINTAINER.md export-ignore

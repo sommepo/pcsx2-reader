@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2002-2026 PCSX2 Dev Team
 // SPDX-License-Identifier: GPL-3.0+
 
+#include "reader/core/emulator.h" // Reader fork
 #include "SPU2/spu2.h"
 #include "SPU2/defs.h"
 #include "SPU2/Debug.h"
@@ -530,6 +531,8 @@ __forceinline void spu2Output(StereoOut32 out)
 		s_current_chunk_pos = 0;
 
 		s_output_stream->WriteChunk(s_current_chunk.data());
+		// Reader fork: what the game plays is kept for a while, for the audio of a card.
+		Reader::Emu::OnAudioFloat(s_current_chunk.data(), s_current_chunk.size() / 2);
 
 		if (SPU2::IsAudioCaptureActive()) [[unlikely]]
 			GSCapture::DeliverAudioPacket(s_current_chunk.data());

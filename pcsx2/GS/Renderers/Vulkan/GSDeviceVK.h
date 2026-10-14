@@ -386,7 +386,7 @@ public:
 	{
 		NUM_TFX_DYNAMIC_OFFSETS = 2,
 		NUM_UTILITY_SAMPLERS = 1,
-		CONVERT_PUSH_CONSTANTS_SIZE = 96,
+		CONVERT_PUSH_CONSTANTS_SIZE = 128, // Reader fork: was 96; DisplayConstantBuffer grew
 
 		NUM_CAS_PIPELINES = 2,
 	};

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS/Renderers/OpenGL/GLContext.h"
+#include "reader/render/crt_present.h" // Reader fork
 #include "GS/Renderers/OpenGL/GSDeviceOGL.h"
 #include "GS/Renderers/OpenGL/GLState.h"
 #include "GS/GSState.h"
@@ -495,12 +496,13 @@ bool GSDeviceOGL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 		GL_PUSH("GSDeviceOGL::Present");
 
 		// these all share the same vertex shader
-		const std::optional<std::string> shader = ReadShaderSource("shaders/opengl/present.glsl");
+		std::optional<std::string> shader = ReadShaderSource("shaders/opengl/present.glsl");
 		if (!shader.has_value())
 		{
 			Host::ReportErrorAsync("GS", "Failed to read shaders/opengl/present.glsl.");
 			return false;
 		}
+		*shader += ReaderCrtPresent::Source(ReaderCrtPresent::Language::OpenGL); // Reader fork
 
 		std::string present_vs(GetShaderSource("vs_main", GL_VERTEX_SHADER, *shader));
 
@@ -522,6 +524,12 @@ bool GSDeviceOGL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 			m_present[i].RegisterUniform("u_source_resolution");
 			m_present[i].RegisterUniform("u_rcp_source_resolution");
 			m_present[i].RegisterUniform("u_time");
+			// Reader fork: the rest of DisplayConstantBuffer, read by ps_reader_crt alone
+			m_present[i].RegisterUniform("u_reader0");
+			m_present[i].RegisterUniform("u_reader1");
+			m_present[i].RegisterUniform("u_reader2");
+			m_present[i].RegisterUniform("u_reader3");
+			m_present[i].RegisterUniform("u_reader4");
 		}
 	}
 
@@ -1884,6 +1892,8 @@ void GSDeviceOGL::PresentRect(GSTexture* sTex, const GSVector4& sRect, GSTexture
 	cb.SetSource(sRect, sTex->GetSize());
 	cb.SetTarget(dRect, ds);
 	cb.SetTime(shaderTime);
+	if (shader == PresentShader::READER_CRT) // Reader fork
+		cb.SetReaderCrt(sRect, sTex->GetSize(), dRect);
 
 	GLProgram& prog = m_present[static_cast<int>(shader)];
 	prog.Bind();
@@ -1896,6 +1906,14 @@ void GSDeviceOGL::PresentRect(GSTexture* sTex, const GSVector4& sRect, GSTexture
 	prog.Uniform2fv(6, &cb.SourceResolution.x);
 	prog.Uniform2fv(7, &cb.RcpSourceResolution.x);
 	prog.Uniform1f(8, cb.TimeAndPad.x);
+	if (shader == PresentShader::READER_CRT) // Reader fork
+	{
+		prog.Uniform1f(9, cb.TimeAndPad.y);
+		prog.Uniform1f(10, cb.TimeAndPad.z);
+		prog.Uniform1f(11, cb.TimeAndPad.w);
+		prog.Uniform4fv(12, cb.Reader3.F32);
+		prog.Uniform4fv(13, cb.Reader4.F32);
+	}
 
 	OMSetDepthStencilState(m_convert.dss);
 	OMSetBlendState(false);

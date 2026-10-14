@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "SIO/Memcard/MemoryCardFile.h"
+#include "reader/core/emulator.h" // Reader fork
 #include "SIO/Memcard/MemoryCardFolder.h"
 
 #include "common/Assertions.h"
@@ -1146,6 +1147,7 @@ void FolderMemoryCard::Flush()
 	m_oldDataCache.clear();
 
 	Console.WriteLn("FolderMcd: Done! Took %.2f ms.", timeFlushStart.GetTimeMilliseconds());
+	Reader::Emu::OnMemoryCardWritten(m_slot); // Reader fork: a save was written (save sync)
 
 #ifdef DEBUG_WRITE_FOLDER_CARD_IN_MEMORY_TO_FILE_ON_CHANGE
 	WriteToFile(m_folderName.GetFullPath().RemoveLast() + L"-debug_" + wxDateTime::Now().Format(L"%Y-%m-%d-%H-%M-%S") + L"_post-flush.ps2");

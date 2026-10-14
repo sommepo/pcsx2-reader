@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "DisplayWidget.h"
+#include "reader/qt/install.h" // Reader fork
 #include "MainWindow.h"
 #include "QtHost.h"
 #include "QtUtils.h"
@@ -302,6 +303,11 @@ bool DisplaySurface::event(QEvent* event)
 		{
 			const QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
 
+			// Reader fork: the reader follows the pointer (a word it rests on can be looked up),
+			// and what it took with a press stays its own until the button is let go.
+			if (ReaderUi::PointerMove(mouse_event->position()))
+				return true;
+
 			if (!m_relative_mouse_enabled)
 			{
 				const qreal dpr = devicePixelRatio();
@@ -348,6 +354,16 @@ bool DisplaySurface::event(QEvent* event)
 		case QEvent::MouseButtonDblClick:
 		case QEvent::MouseButtonRelease:
 		{
+			// Reader fork: a click on the game's own text is the reader's.
+			{
+				const QMouseEvent* mouse_event = static_cast<const QMouseEvent*>(event);
+				const bool taken = (event->type() == QEvent::MouseButtonRelease) ?
+					ReaderUi::PointerRelease(mouse_event->position()) :
+					ReaderUi::PointerPress(mouse_event->position(), mouse_event->button() == Qt::LeftButton);
+				if (taken)
+					return true;
+			}
+
 			if (const u32 button_mask = static_cast<u32>(static_cast<const QMouseEvent*>(event)->button()))
 			{
 				Host::RunOnCPUThread([button_index = std::countr_zero(button_mask),

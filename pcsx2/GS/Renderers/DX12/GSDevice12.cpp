@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "GS/GS.h"
+#include "reader/render/crt_present.h" // Reader fork
 #include "GS/GSGL.h"
 #include "GS/GSPerfMon.h"
 #include "GS/GSUtil.h"
@@ -1804,6 +1805,8 @@ void GSDevice12::PresentRect(GSTexture* sTex, const GSVector4& sRect, GSTexture*
 	cb.SetSource(sRect, sTex->GetSize());
 	cb.SetTarget(dRect, dTex ? dTex->GetSize() : GSVector2i(GetWindowWidth(), GetWindowHeight()));
 	cb.SetTime(shaderTime);
+	if (shader == PresentShader::READER_CRT) // Reader fork
+		cb.SetReaderCrt(sRect, sTex->GetSize(), dRect);
 	SetUtilityRootSignature();
 	SetUtilityPushConstants(&cb, sizeof(cb));
 
@@ -2961,12 +2964,16 @@ bool GSDevice12::CompileConvertPipelines()
 
 bool GSDevice12::CompilePresentPipelines()
 {
-	const std::optional<std::string> shader = ReadShaderSource("shaders/dx11/present.fx");
+	std::optional<std::string> shader = ReadShaderSource("shaders/dx11/present.fx");
 	if (!shader)
 	{
 		Host::ReportErrorAsync("GS", "Failed to read shaders/dx11/present.fx.");
 		return false;
 	}
+	// Reader fork: the CRT picture's shader is built from a text of its own (the file's and
+	// the reader's after it), so that nothing the reader adds can keep the others from
+	// being built. Needs proper testing: Direct3D was never run with it.
+	const std::string reader_shader = *shader + ReaderCrtPresent::Source(ReaderCrtPresent::Language::HLSL);
 
 	ComPtr<ID3DBlob> vs = GetUtilityVertexShader(*shader, "vs_main");
 	if (!vs)
@@ -2986,7 +2993,13 @@ bool GSDevice12::CompilePresentPipelines()
 	{
 		const int index = static_cast<int>(i);
 
-		ComPtr<ID3DBlob> ps(GetUtilityPixelShader(*shader, ShaderEntryPoint(i)));
+		ComPtr<ID3DBlob> ps(GetUtilityPixelShader(i == PresentShader::READER_CRT ? reader_shader : *shader, ShaderEntryPoint(i)));
+		if (!ps && i == PresentShader::READER_CRT)
+		{
+			// Reader fork: without its shader the CRT picture is the plain one.
+			Console.Warning("Reader: the CRT shader was not built; the picture is shown without it");
+			ps = GetUtilityPixelShader(*shader, ShaderEntryPoint(PresentShader::COPY));
+		}
 		if (!ps)
 			return false;
 

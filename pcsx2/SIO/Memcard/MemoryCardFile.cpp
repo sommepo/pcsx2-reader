@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 #include "SIO/Memcard/MemoryCardFile.h"
+#include "reader/core/emulator.h" // Reader fork
 
 #include "SIO/Memcard/MemoryCardFolder.h"
 #include "SIO/Sio.h"
@@ -490,6 +491,9 @@ s32 FileMemoryCard::Save(uint slot, const u8* src, u32 adr, int size)
 
 	if (std::fwrite(m_currentdata.data(), size, 1, mcfp) == 1)
 	{
+		// Reader fork: a save was written; it is on disk before save sync looks at it.
+		std::fflush(mcfp);
+		Reader::Emu::OnMemoryCardWritten(slot);
 		static auto last = std::chrono::time_point<std::chrono::system_clock>();
 
 		std::chrono::duration<float> elapsed = std::chrono::system_clock::now() - last;

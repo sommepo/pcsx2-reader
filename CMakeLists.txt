@@ -63,6 +63,9 @@ if(ENABLE_TESTS)
 	add_subdirectory(tests/ctest)
 endif()
 
+# Reader fork: the reading layer (reader/CMakeLists.txt says what it is made of).
+add_subdirectory(reader)
+
 # gsrunner
 if(ENABLE_GSRUNNER)
 	add_subdirectory(pcsx2-gsrunner)

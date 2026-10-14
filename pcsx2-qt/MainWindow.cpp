@@ -7,6 +7,7 @@
 #include "DisplayWidget.h"
 #include "GameList/GameListRefreshThread.h"
 #include "GameList/GameListWidget.h"
+#include "reader/qt/install.h" // Reader fork
 #include "LogWindow.h"
 #include "MainWindow.h"
 #include "QtHost.h"
@@ -229,6 +230,46 @@ void MainWindow::setupAdditionalUi()
 	m_ui.actionGridViewShowTitles->setChecked(m_game_list_widget->getShowGridCoverTitles());
 	m_ui.actionGridViewShowFullTitles->setChecked(m_game_list_widget->getShowGridFullCoverTitles());
 	m_ui.mainContainer->addWidget(m_game_list_widget);
+
+	// Reader fork: the reader (its menu, its layer over the game's picture) and the PS2-style
+	// menu over the game list.
+	ReaderUi::Install(this, ReaderUi::MainWindowHooks{
+		.game_list = m_game_list_widget,
+		.picture_area = m_ui.mainContainer,
+		.games = []() {
+			QList<ReaderUi::HomeGame> games;
+			auto lock = GameList::GetLock();
+			const u32 count = GameList::GetEntryCount();
+			for (u32 i = 0; i < count; i++)
+			{
+				const GameList::Entry* entry = GameList::GetEntryByIndex(i);
+				if (!entry || !entry->IsDisc())
+					continue;
+				games.append(ReaderUi::HomeGame{QString::fromStdString(entry->path), QString::fromStdString(entry->GetTitle()),
+					QString::fromStdString(entry->serial), QString::fromStdString(GameList::GetCoverImagePathForEntry(entry))});
+			}
+			return games;
+		},
+		.start_game = [this](const QString& path) {
+			std::optional<GameList::Entry> found;
+			{
+				auto lock = GameList::GetLock();
+				if (const GameList::Entry* entry = GameList::GetEntryForPath(path.toUtf8().constData()))
+					found = *entry;
+			}
+			if (found.has_value() && !s_vm_valid)
+				startGameListEntry(found.value());
+		},
+		.add_game_folder = [this]() { getSettingsWindow()->getGameListSettingsWidget()->addSearchDirectory(this); },
+		.open = [this](const QString& what) {
+			if (what == QStringLiteral("controllers"))
+				doControllerSettings(ControllerSettingsWindow::Category::GlobalSettings);
+			else
+				doSettings();
+		},
+		.update_theme = [this]() { updateTheme(); },
+		.set_paused = [](bool paused) { g_emu_thread->setVMPaused(paused); },
+	});
 
 	updateEmulationActions(false, false, false);
 	updateDisplayRelatedActions(false, false, false);
@@ -1784,6 +1825,7 @@ void MainWindow::onGameListRefreshComplete()
 {
 	m_ui.statusBar->clearMessage();
 	clearProgressBar();
+	ReaderUi::GamesChanged(); // Reader fork: the PS2-style menu shows the same games
 }
 
 void MainWindow::onGameListSelectionChanged()
