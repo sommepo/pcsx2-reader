@@ -12,9 +12,10 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/env.sh"
 root="$(cd "$here/../.." && pwd)"
-built="$root/build-windows/pcsx2-qt"
+build="${READER_WINDOWS_BUILD:-$root/build-windows}"
+built="$build/pcsx2-qt"
 exe="$built/pcsx2-qt.exe"
-out="$root/build-windows/package/PCSX2Reader"
+out="$build/package/PCSX2Reader"
 deps="$READER_WINDOWS_DEPS"
 objdump="$READER_HOST_PREFIX/bin/llvm-objdump"
 [ -f "$exe" ] || { echo "no $exe: run tools/reader/build-windows.sh first" >&2; exit 1; }
@@ -94,6 +95,10 @@ and your games as disc images.
 The game list is the PS2's own menu: Browser has the games, System Configuration the
 reader's windows and the emulator's settings. Arrow keys, Enter, Esc; or the mouse.
 
+A game's text is read by a game script written for that game. Reader > Game scripts (or
+Game Scripts under System Configuration) installs them from the list published with the app,
+or from a file of your own.
+
 In a game whose text can be read (a book on its picture in the Browser), click a word of
 the game's own text to look it up. That needs a dictionary: Reader > Dictionaries
 (dictionaries made for Yomitan, as zip files).
@@ -101,8 +106,8 @@ the game's own text to look it up. That needs a dictionary: Reader > Dictionarie
 Cards: Reader > Anki setup, with Anki open on this computer and its AnkiConnect add-on
 installed (in Anki: Tools > Add-ons > Get Add-ons, code 2055492159).
 
-This is a personal build: it is not PCSX2, and nothing about it should be reported to the
-PCSX2 project.
+This is PCSX2 Reader (https://github.com/sommepo/pcsx2-reader): it is not PCSX2, and
+nothing about it should be reported to the PCSX2 project.
 TXT
 
 ( cd "$out/.." && rm -f PCSX2Reader-windows.zip && python3 - <<'PY'

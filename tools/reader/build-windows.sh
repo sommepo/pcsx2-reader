@@ -8,7 +8,7 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/env.sh"
 root="$(cd "$here/../.." && pwd)"
-build="$root/build-windows"
+build="${READER_WINDOWS_BUILD:-$root/build-windows}"
 P="$READER_HOST_PREFIX"
 export PATH="$P/bin:$PATH"
 export LD_LIBRARY_PATH="$READER_QT_HOST/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
