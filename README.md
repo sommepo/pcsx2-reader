@@ -6,6 +6,8 @@ statistics.
 
 For Windows. The Android version is [ARMSX2 Reader](https://github.com/sommepo/armsx2-reader).
 
+One of four [reader emulators](https://github.com/sommepo/readers) for PS2, PSP and Dreamcast games.
+
 <p align="center">
   <img src="docs/reader/media/lookup-demo.gif" width="720" alt="Pointing at words in ひぐらしのなく頃に祭's text opens their dictionary entries">
 </p>
