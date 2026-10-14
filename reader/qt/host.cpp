@@ -445,7 +445,8 @@ void Install(QMainWindow* main_window, MainWindowHooks hooks) {
         }
     };
     FillSettings();
-    // Save sync's page, in the Reader menu.
+#ifndef READER_NO_SAVE_SYNC
+    // Save sync's page, in the Reader menu (not in a published build).
     Reader::Emu::EnsureSaveSync();
     QAction* sync = g_controller->Menu()->addAction(QObject::tr("Save &sync..."));
     sync->setObjectName(QStringLiteral("reader_save_sync"));
@@ -453,6 +454,7 @@ void Install(QMainWindow* main_window, MainWindowHooks hooks) {
         SaveSyncDialog dialog(main_window);
         dialog.exec();
     });
+#endif
     RefreshHome();
     TellHomeStats();
     // A game's stop is not the only moment the statistics go out: a window closed with its game

@@ -106,6 +106,12 @@ target_sources(PCSX2 PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/render/crt_present.h)
 target_include_directories(PCSX2 PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(PCSX2 PUBLIC reader_core reader_save_sync)
+# A published build (READER_SAVE_SYNC=OFF) has no save sync: no page for it, and each game
+# uses the memory cards the settings name, as in PCSX2.
+option(READER_SAVE_SYNC "Save sync (a service of one's own keeps each game's saves)" ON)
+if(NOT READER_SAVE_SYNC)
+	target_compile_definitions(PCSX2 PUBLIC READER_NO_SAVE_SYNC)
+endif()
 
 if(ENABLE_QT_UI)
 	add_subdirectory(desktop)

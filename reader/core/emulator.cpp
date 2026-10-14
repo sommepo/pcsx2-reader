@@ -163,6 +163,9 @@ void OnShutdown() {
 }
 
 void EnsureSaveSync() {
+#ifdef READER_NO_SAVE_SYNC
+    return; // a published build has no save sync
+#endif
     if (SaveSync::Host::Started()) {
         return;
     }
@@ -191,7 +194,10 @@ void BeforeMemoryCards(const std::string& serial, const std::string& title) {
     EnsureSaveSync();
     // READER_NO_OWN_CARD=1 leaves the memory cards as the settings have them (for looking
     // into a problem with a card).
-    const bool game = !SaveSync::Host::TitleOf(serial).empty() && std::getenv("READER_NO_OWN_CARD") == nullptr;
+    bool game = !SaveSync::Host::TitleOf(serial).empty() && std::getenv("READER_NO_OWN_CARD") == nullptr;
+#ifdef READER_NO_SAVE_SYNC
+    game = false; // without save sync the cards are the settings' own, as in PCSX2
+#endif
     {
         std::scoped_lock lock{g_card_mutex};
         if (game && serial == g_card_serial) {
