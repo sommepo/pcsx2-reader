@@ -46,6 +46,13 @@ public:
     /// Translated code is out of date: a hook was added or removed.
     virtual void InvalidateCode() = 0;
     virtual std::vector<MemoryRegion> MemoryRegions() = 0;
+    /// Writes `bytes` into the game's memory; false where it is not mapped (or not writable
+    /// here). Only a profile marking progress writes (Engine::MarkProgress).
+    virtual bool WriteMemory(u64 address, const std::string& bytes) {
+        (void)address;
+        (void)bytes;
+        return false;
+    }
 };
 
 /// One piece of text presented by the game, as produced by a game profile.
@@ -122,6 +129,22 @@ struct MemoryRegion {
 
 enum class LogLevel { Info, Warning, Error };
 
+/// One thing a game keeps as progress that a profile lets the player set by hand (a route read,
+/// an ending seen): for progress made elsewhere, in another copy of the game. See reader.progress.
+struct ProgressItem {
+    std::string id;
+    std::string label;
+    std::string group; ///< Items of one group are shown together; may be empty
+    bool done{};
+};
+
+/// What a profile offers to mark (reader.progress), with each item's state as the game has it.
+struct ProgressList {
+    std::string title; ///< "Routes", say
+    std::string note;  ///< What the player must do for the game to keep a mark, or empty
+    std::vector<ProgressItem> items;
+};
+
 /**
  * Runs a per-game Lua profile that turns game state into text events.
  *
@@ -142,6 +165,7 @@ public:
     using NativeHandler = std::function<void(const GuestRegisters& regs)>;
     using HookPredicate = std::function<bool(const std::string& game_id)>;
     using MemoryReader = std::function<std::string(u64 address, std::size_t size)>;
+    using MemoryWriter = std::function<bool(u64 address, const std::string& bytes)>;
 
     static Engine& Instance();
 
@@ -216,6 +240,28 @@ public:
     /// Whether the latest text of a window is a choice that is on the screen now.
     [[nodiscard]] bool ChoiceShown() const;
 
+    // ---- Progress set by hand (reader.progress) ----
+
+    /// What the running profile offers to mark, read from the game now; nothing when it offers
+    /// nothing (or its functions fail: the error is logged).
+    [[nodiscard]] std::optional<ProgressList> Progress();
+    /// Marks an item done or not done: the profile writes it into the game's memory. False with
+    /// `error` set when there is no such item or the profile failed.
+    bool MarkProgress(const std::string& id, bool done, std::string& error);
+
+    // ---- Touch play (reader.cursor) ----
+
+    /// Where the game's cursor is among the answers of the choice on screen, as the profile
+    /// reports it (reader.cursor): what lets a tap on an answer be turned into presses of the
+    /// d-pad. `index` is -1 while no answer is under it yet.
+    struct AnswerCursor {
+        int index{};
+        bool horizontal{}; ///< the answers are side by side: left and right move it
+    };
+    [[nodiscard]] std::optional<AnswerCursor> Cursor() const;
+    /// Used by the Lua bindings.
+    void SetCursor(std::optional<AnswerCursor> cursor);
+
     // ---- Profiles ----
 
     /// Replaces the running profile. Returns false and keeps no profile when the script fails.
@@ -258,7 +304,8 @@ public:
      * profiles: guest memory comes from `reader` and hooks apply to whatever code reaches
      * Dispatch. Starts from a clean state (no profile, no modules, frame 0, sequence 1).
      */
-    void StartDetached(MemoryReader reader, const std::string& game_id = {});
+    void StartDetached(MemoryReader reader, const std::string& game_id = {},
+                       MemoryWriter writer = nullptr);
     /// Leaves detached operation, removing the profile and every hook.
     void StopDetached();
 
@@ -277,6 +324,13 @@ public:
     bool hooks_allowed = true; ///< False while a profile that declared "no hooks" is loaded
     void AddFrameCallback(int lua_ref);
     void AddStateCallback(int lua_ref);
+    /// reader.progress: the profile's table (items, done, mark), replacing an earlier one.
+    void SetProgress(int lua_ref);
+    /// Only while the profile marks progress (MarkProgress) may it write the game's memory.
+    [[nodiscard]] bool WritesAllowed() const {
+        return writes_allowed;
+    }
+    bool WriteMemory(u64 address, const std::string& bytes);
     void Emit(TextEvent event);
     /// Reports where the latest text of `layout.window` is on screen. Returns false when no
     /// text was emitted for that window (there is nothing the layout could belong to).
@@ -326,6 +380,9 @@ private:
     std::atomic<bool> has_hooks{false};
     std::vector<FrameCallback> frame_callbacks;
     std::vector<int> state_callbacks;
+    int progress_ref{NoLuaRef};
+    bool writes_allowed{};
+    std::optional<AnswerCursor> cursor;
 
     /// What is known about a window that events were emitted for.
     struct WindowText {
@@ -344,6 +401,7 @@ private:
     void CloseAllLayouts();
     std::string last_error;
     MemoryReader detached_memory; ///< Set while running detached from an emulated system
+    MemoryWriter detached_writer;
 
     mutable std::mutex frontend_mutex; ///< Guards the callbacks and the posted-work queue
     EventCallback event_callback;

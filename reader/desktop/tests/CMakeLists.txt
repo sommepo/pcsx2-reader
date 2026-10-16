@@ -16,6 +16,10 @@ add_executable(reader_desktop_tests
     # Going on to the next choice (next_choice.h in the reader's core), likewise.
     next_choice_test.cpp
     ${CMAKE_SOURCE_DIR}/reader/core/next_choice.cpp
+    # Progress set by hand (reader.progress), through the engine with made-up memory.
+    progress_test.cpp
+    # Touch play: reader.cursor, and each visual novel's profile against made-up memory.
+    touch_play_test.cpp
     deinflector.cpp
     dictionary.cpp
     discord_presence.cpp
@@ -39,7 +43,7 @@ target_compile_options(reader_desktop_tests PRIVATE -fexceptions)
 set(READER_BUNDLED_PROFILE_DIR "${CMAKE_SOURCE_DIR}/reader/profiles")
 target_compile_definitions(reader_desktop_tests PRIVATE
     READER_BUNDLED_PROFILE_DIR="${READER_BUNDLED_PROFILE_DIR}")
-target_link_libraries(reader_desktop_tests PRIVATE reader_desktop QuaZip::QuaZip
+target_link_libraries(reader_desktop_tests PRIVATE reader_desktop reader_core QuaZip::QuaZip
                                                    Catch2::Catch2WithMain Threads::Threads)
 if (NOT MSVC)
     target_compile_options(reader_desktop_tests PRIVATE

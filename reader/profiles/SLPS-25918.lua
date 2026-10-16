@@ -2,6 +2,13 @@
 -- reader: title アマガミ
 -- reader: reads The message window's text with furigana, each message when it begins, and choices
 -- reader: version SLPS-25918
+-- reader: touch press
+-- reader: buttons start triangle up down circle cross
+-- Touch play's buttons (found in the harness, 2026-10-16): START at the title (○ does nothing
+-- there), up and down for the title's and the menu's lists, ○ to choose (a tap on the picture
+-- is ○ too, but a button is sure), × back out; △ the menu, × held
+-- skips, L1 the backlog, SELECT the help screen, START auto (its help screen).
+--
 -- アマガミ (Enterbrain, PS2, 2009), SLPS-25918. Program D72C9E2A.
 --
 -- Two sources are read:
@@ -56,6 +63,11 @@ local NAME_GLYPHS = 3
 local RECENT, LATELY = 3600, 240
 local SHEET = 1024     -- glyph sheet size; sheet positions are taken modulo it
 local ANSWERS_MAX = 8
+-- The bar that lights the answer the cursor is on: a plain item of the draw list (0x50 bytes,
+-- its corners at 0x40 and 0x48), 560 by 36 in the picture, over the answer's row; there is
+-- none until the d-pad is first pressed at a choice (○ picks nothing then). Measured at the
+-- first choice of a new game.
+local BAR_SIZE, BAR_W, BAR_H = 0x50, 560, 36
 
 local function valid(p)
     return p and p >= 0x00100000 and p < 0x02000000
@@ -318,9 +330,45 @@ local steady_key, steady = nil, 0
 local resolved = false   -- whether the pictures on the screen were dealt with
 local layouts = {}
 
+-- Touch play: the rows of the choice on the screen (each answer's top in the picture), and the
+-- answer the cursor was last reported on.
+local answer_rows
+local cursor_said
+
+local function say_cursor(at)
+    if at == cursor_said then return end
+    cursor_said = at
+    if reader.cursor then reader.cursor(at) end
+end
+
 local function drop()
     for name in pairs(layouts) do reader.layout(name, nil) end
     layouts = {}
+    answer_rows = nil
+    say_cursor(nil)
+end
+
+-- Which answer the bar lights: the row whose characters stand in it; -1 when there is no bar.
+local function lit_answer()
+    local pool = mem.read(POOL, POOL_END - POOL)
+    if not pool then return -1 end
+    for at = 1, #pool - ENTRY_SIZE + 1, ENTRY_SIZE do
+        local thing, size = string.unpack("<I4I4", pool, at + 12)
+        if size == BAR_SIZE and thing >= THINGS and thing + BAR_SIZE <= THINGS_END then
+            local corners = mem.read(thing + 0x40, 12)
+            if corners and #corners == 12 then
+                local x0, y0 = string.unpack("<I2I2", corners, 1)
+                local x1, y1 = string.unpack("<I2I2", corners, 9)
+                if (x1 - x0) // 16 == BAR_W and (y1 - y0) * 2 // 16 == BAR_H then
+                    local top = (y0 / 16 - ORIGIN_Y) * 2
+                    for index, row in ipairs(answer_rows) do
+                        if row >= top - 4 and row < top + BAR_H then return index - 1 end
+                    end
+                end
+            end
+        end
+    end
+    return -1
 end
 
 reader.on_state_loaded(function()
@@ -379,6 +427,7 @@ reader.on_frame(function()
         end
     end
     if frame % EVERY ~= 0 then return end
+    if answer_rows then say_cursor(lit_answer()) end
     for address, known in pairs(recent) do
         if frame - known.when > RECENT then recent[address] = nil end
     end
@@ -520,15 +569,21 @@ reader.on_frame(function()
         reader.emit{ text = whole, speaker = speaker, ruby = ruby, channel = channel, window = window, id = text_key }
     end
     local cells, at = {}, #glyphs - best.count
+    local rows = {}
     for _, slot in ipairs(slots_) do
         if slot == "drawn" then
             at = at + 1
             cells[#cells + 1] = { glyphs[at][1], glyphs[at][2], GLYPH_W - 1, CELL_HEIGHT }
         elseif slot == "mark" then
             at = at + 1
+            rows[#rows + 1] = glyphs[at][2] -- an answer's mark begins its row
         else
             cells[#cells + 1] = false
         end
+    end
+    if best.answers and not answer_rows then
+        answer_rows = rows
+        say_cursor(lit_answer())
     end
     reader.layout(window, { space = { 640, 448 }, glyphs = cells })
     layouts[window] = true

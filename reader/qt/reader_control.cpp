@@ -5,10 +5,14 @@
 #include <cmath>
 #include <exception>
 #include <functional>
+#include <memory>
+#include <vector>
 #include <QAbstractButton>
 #include <QApplication>
 #include <QComboBox>
 #include <QCursor>
+#include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -25,11 +29,13 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPen>
 #include <QPointer>
+#include <QPolygonF>
 #include <QTableWidget>
 #include <QTimer>
-#include <QWindow>
 #include <QTreeWidget>
+#include <QWindow>
 #include "reader/qt/host.h"
 #include "reader/core/audio_tap.h"
 #include "reader/core/engine.h"
@@ -151,6 +157,7 @@ void ReaderControl::Pump(QLocalSocket* socket) {
 
 void ReaderControl::SendPointer(const QPointF& position, int kind,
                                 Qt::KeyboardModifiers modifiers) {
+    pointer_at = position;
     const QPoint local = position.toPoint();
     const QPoint global = render_window->mapToGlobal(local);
     // Where the pointer is, for whoever asks where it is now rather than where the event was.
@@ -345,38 +352,100 @@ QString ReaderControl::DescribeDialog() const {
     return Json(root);
 }
 
-void ReaderControl::Grab(const QString& file, const Reply& reply) {
+QImage ReaderControl::Compose(const QImage& frame, bool pointer) const {
     // What a player would see: the game's picture where the window shows it, and over it
     // what the reader draws and the popup.
+    QImage canvas(render_window->size(), QImage::Format_ARGB32_Premultiplied);
+    canvas.fill(Qt::black);
+    QPainter painter(&canvas);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    if (!frame.isNull()) {
+        painter.drawImage(controller->PictureArea(), frame);
+    }
+    ReaderOverlay* overlay = controller->Overlay();
+    if (overlay->isVisible()) {
+        painter.drawPixmap(0, 0, overlay->grab());
+    }
+    LookupPopup* popup = controller->Lookups().Popup();
+    if (popup->isVisible()) {
+        painter.drawPixmap(popup->mapToGlobal(QPoint(0, 0)) - render_window->mapToGlobal(QPoint(0, 0)),
+                           popup->grab());
+    }
+    AudioPrompt* prompt = controller->Lookups().Prompt();
+    if (prompt->isVisible()) {
+        painter.drawPixmap(prompt->mapToGlobal(QPoint(0, 0)) - render_window->mapToGlobal(QPoint(0, 0)),
+                           prompt->grab());
+    }
+    if (pointer && pointer_at.x() >= 0) {
+        // An arrow where the channel put the pointer (the stand-in screen draws none).
+        const QPointF p = pointer_at;
+        const QPolygonF arrow({p, p + QPointF(0, 19), p + QPointF(5, 14), p + QPointF(9, 22),
+                               p + QPointF(12, 21), p + QPointF(8, 13), p + QPointF(14, 13)});
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QPen(QColor(20, 20, 30), 1.2));
+        painter.setBrush(Qt::white);
+        painter.drawPolygon(arrow);
+    }
+    painter.end();
+    return canvas;
+}
+
+void ReaderControl::Grab(const QString& file, const Reply& reply) {
     controller->CaptureFrame(1920, [this, file, reply](const QImage& frame) {
-        QImage canvas(render_window->size(), QImage::Format_ARGB32_Premultiplied);
-        canvas.fill(Qt::black);
-        QPainter painter(&canvas);
-        painter.setRenderHint(QPainter::SmoothPixmapTransform);
-        if (!frame.isNull()) {
-            painter.drawImage(controller->PictureArea(), frame);
-        }
-        ReaderOverlay* overlay = controller->Overlay();
-        if (overlay->isVisible()) {
-            painter.drawPixmap(0, 0, overlay->grab());
-        }
-        LookupPopup* popup = controller->Lookups().Popup();
-        if (popup->isVisible()) {
-            painter.drawPixmap(popup->mapToGlobal(QPoint(0, 0)) -
-                                   render_window->mapToGlobal(QPoint(0, 0)),
-                               popup->grab());
-        }
-        AudioPrompt* prompt = controller->Lookups().Prompt();
-        if (prompt->isVisible()) {
-            painter.drawPixmap(prompt->mapToGlobal(QPoint(0, 0)) -
-                                   render_window->mapToGlobal(QPoint(0, 0)),
-                               prompt->grab());
-        }
-        painter.end();
+        const QImage canvas = Compose(frame, false);
         reply(canvas.save(file) ? QStringLiteral("OK %1%2").arg(file, frame.isNull()
                                                                           ? QStringLiteral(" (no frame)")
                                                                           : QString())
                                 : QStringLiteral("ERR cannot write ") + file);
+    });
+}
+
+void ReaderControl::Record(const QString& folder, int ms, int fps, const Reply& reply) {
+    // The game's frame is asked for again whenever the last one has come; the reader's layer
+    // and the popup are drawn at every tick, so the mark's glide is seen as it is drawn.
+    struct Take {
+        QImage frame;
+        bool asking = false;
+        std::vector<QImage> pictures;
+        QTimer timer;
+        QElapsedTimer clock;
+    };
+    auto take = std::make_shared<Take>();
+    QDir().mkpath(folder);
+    const int interval = std::max(10, 1000 / std::clamp(fps, 1, 60));
+    take->timer.setInterval(interval);
+    take->clock.start();
+    QObject::connect(&take->timer, &QTimer::timeout, this, [this, take, folder, ms, reply] {
+        if (!take->asking) {
+            take->asking = true;
+            controller->CaptureFrame(1920, [take](const QImage& frame) {
+                if (!frame.isNull()) {
+                    take->frame = frame;
+                }
+                take->asking = false;
+            });
+        }
+        take->pictures.push_back(Compose(take->frame, true));
+        if (take->clock.elapsed() < ms) {
+            return;
+        }
+        take->timer.stop();
+        int written = 0;
+        for (const QImage& picture : take->pictures) {
+            if (picture.save(QStringLiteral("%1/f%2.png").arg(folder).arg(written, 4, 10, QLatin1Char('0')))) {
+                ++written;
+            }
+        }
+        reply(QStringLiteral("OK %1 pictures in %2").arg(written).arg(folder));
+        // The timer's connection holds `take`: let it go, but not from inside its own timeout.
+        QTimer::singleShot(0, this, [take] { take->timer.disconnect(); });
+    });
+    // The first frame before the first tick.
+    take->asking = true;
+    controller->CaptureFrame(1920, [take](const QImage& frame) {
+        take->frame = frame;
+        take->asking = false;
+        take->timer.start();
     });
 }
 
@@ -436,6 +505,36 @@ void ReaderControl::Run(const QString& command, const Reply& reply) {
             }
             ok(parts.value(1) != QStringLiteral("?") ? QStringLiteral("asked")
                : Reader::Emu::GoingToNextChoice() ? QStringLiteral("going") : QStringLiteral("not going"));
+        } else if (name == QStringLiteral("cursor")) {
+            // cursor: which answer of the choice on the screen the game's cursor is on, as the
+            // profile reports it (reader.cursor): "none" without a choice, -1 on none yet,
+            // " sideways" after it when the answers stand side by side.
+            const auto at = Reader::Engine::Instance().Cursor();
+            ok(!at ? QStringLiteral("none")
+                   : QString::number(at->index) + (at->horizontal ? QStringLiteral(" sideways") : QString()));
+        } else if (name == QStringLiteral("progress")) {
+            // progress: what the game's script offers to mark, one "id done|- label" a line;
+            // "progress ID on|off" marks one (reader.progress).
+            auto& engine = Reader::Engine::Instance();
+            QString out;
+            if (parts.size() >= 3) {
+                std::string error;
+                if (!engine.MarkProgress(parts.value(1).toStdString(),
+                                         parts.value(2) == QStringLiteral("on"), error)) {
+                    out = QStringLiteral("not marked: %1\n").arg(QString::fromStdString(error));
+                }
+            }
+            if (const auto list = engine.Progress()) {
+                for (const Reader::ProgressItem& item : list->items) {
+                    out += QStringLiteral("%1 %2 %3\n")
+                               .arg(QString::fromStdString(item.id),
+                                    item.done ? QStringLiteral("done") : QStringLiteral("-"),
+                                    QString::fromStdString(item.label));
+                }
+            } else {
+                out += QStringLiteral("nothing offered");
+            }
+            ok(out.trimmed());
         } else if (name == QStringLiteral("back-button")) {
             // back-button N: as if back button N (1 to 5) of a controller had been pressed.
             controller->Pad()->Inject(parts.value(1).toInt());
@@ -503,6 +602,10 @@ void ReaderControl::Run(const QString& command, const Reply& reply) {
                                [reply] { reply(QStringLiteral("OK")); });
         } else if (name == QStringLiteral("grab")) {
             Grab(rest, reply);
+        } else if (name == QStringLiteral("record")) {
+            // record DIR MS [FPS]: pictures of what a player sees for the README's demos.
+            Record(parts.value(1), parts.value(2).toInt(), parts.size() > 3 ? parts.value(3).toInt() : 30,
+                   reply);
         } else if (name == QStringLiteral("shot")) {
             controller->CaptureFrame(1920, [rest, reply](const QImage& frame) {
                 reply(!frame.isNull() && frame.save(rest) ? QStringLiteral("OK ") + rest
@@ -715,6 +818,39 @@ void ReaderControl::Run(const QString& command, const Reply& reply) {
         } else if (name == QStringLiteral("dump")) {
             // The console's main memory, to a file (under private/): for finding a game's text.
             ok(Reader::Emu::DumpMemory(rest.toStdString()) ? rest : QStringLiteral("(not written)"));
+        } else if (name == QStringLiteral("state")) {
+            // state save N / state load N: a save state slot of the running game (harness only).
+            const bool save = parts.value(1) == QStringLiteral("save");
+            const int slot = parts.value(2).toInt();
+            if ((!save && parts.value(1) != QStringLiteral("load")) || slot < 1 || slot > 10) {
+                reply(QStringLiteral("ERR state save|load 1-10"));
+                return;
+            }
+            Reader::Emu::RunOnEmulator([save, slot, reply] {
+                bool fine = true;
+                if (save) {
+                    Reader::Emu::SaveStateSlot(slot);
+                } else {
+                    fine = Reader::Emu::LoadStateSlot(slot);
+                }
+                PostToGui([fine, reply] { reply(fine ? QStringLiteral("OK") : QStringLiteral("ERR not loaded")); });
+            });
+        } else if (name == QStringLiteral("pause")) {
+            // pause on / pause off: the game held or let go (harness only).
+            const bool paused = parts.value(1) != QStringLiteral("off");
+            Reader::Emu::RunOnEmulator([paused] { Reader::Emu::SetPaused(paused); });
+            ok();
+        } else if (name == QStringLiteral("speed")) {
+            // speed turbo / speed normal: the speed limit off or on (harness only).
+            const bool turbo = parts.value(1) == QStringLiteral("turbo");
+            Reader::Emu::RunOnEmulator([turbo] { Reader::Emu::SetTurbo(turbo); });
+            ok();
+        } else if (name == QStringLiteral("iop")) {
+            // iop PATH: the IOP's main memory, to a file (harness only).
+            ok(Reader::Emu::DumpIopMemory(rest.toStdString()) ? rest : QStringLiteral("(not written)"));
+        } else if (name == QStringLiteral("vram")) {
+            // vram PATH: the GS's memory as a 4-bit texture 1024 wide, a byte a pixel (harness only).
+            ok(Reader::Emu::DumpVram4(rest.toStdString()) ? rest : QStringLiteral("(not written)"));
         } else if (name == QStringLiteral("lua")) {
             // A piece of Lua in the engine, on the emulator's thread; what it returns.
             const std::string code = rest.toStdString();

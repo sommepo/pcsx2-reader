@@ -11,6 +11,10 @@ namespace ReaderUi {
 
 /// The lines read so far, newest first: words in them can be looked up and cards made.
 void RunBacklogDialog(QWidget* parent);
+/// What the game's script offers to mark by hand (reader.progress): its routes, say.
+void RunProgressDialog(QWidget* parent);
+/// Whether the running game's script offers anything to mark.
+bool ProgressOffered();
 /// Reading statistics: today, the games, the reading days and the sessions.
 void RunStatisticsDialog(QWidget* parent);
 /// The installed dictionaries: importing, their order, switching off, deleting.

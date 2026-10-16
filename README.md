@@ -9,7 +9,7 @@ For Windows. The Android version is [ARMSX2 Reader](https://github.com/sommepo/a
 One of four [reader emulators](https://github.com/sommepo/readers) for PS2, PSP and Dreamcast games.
 
 <p align="center">
-  <img src="docs/reader/media/lookup-demo.gif" width="720" alt="Pointing at words in ひぐらしのなく頃に祭's text opens their dictionary entries">
+  <img src="docs/reader/media/lookup-demo.gif" width="720" alt="Pointing at words in Never7's text: the outline glides from word to word and each entry opens beside it">
 </p>
 
 > A fork of [PCSX2](https://github.com/PCSX2/pcsx2) v2.8.2. It is not PCSX2: please report
@@ -20,10 +20,21 @@ One of four [reader emulators](https://github.com/sommepo/readers) for PS2, PSP 
 
 - **Look up words in the game's text.** Point at a word to see its entry. Clicking a word
   works too. Uses Yomitan dictionaries.
+- **The word is outlined, and the outline glides** from word to word as you move along the
+  line. Highlight or no mark at all instead, in Reader settings.
+- **The popup stands right next to the word** and stays put while you go to its **+**, which
+  sits in the bottom left of each entry (or any corner you choose).
 - **Anki cards** with the sentence and a picture of the scene, through AnkiConnect.
 - **Backlog and reading statistics.**
 - **Go on to the next choice**: run a visual novel at full speed to its next choice.
 - **The PS2's own menu** as the game list.
+- **CRT picture** with a tube's frame around it (Reader settings).
+- **Play by touch** for a touch screen: a click on the picture goes on, a click on an answer
+  picks it (off at first, in Reader settings).
+- **Routes finished elsewhere**: mark the CLANNAD routes you finished on another copy, so the
+  game's own progress follows.
+- **A Steam Controller's back buttons** are the reader's: pause the game to look words up,
+  pause the statistics, make a card, open the backlog.
 
 <table>
   <tr>
@@ -52,6 +63,7 @@ You can also install a script from a file.
 | Remember11 -the age of infinity- | SLPM-65550 | Story text, speakers, choices |
 | Never7 -the end of infinity- | SLPS-25256 | Story text, speakers, choices |
 | アマガミ | SLPS-25918 | Message window, furigana, choices |
+| CLANNAD | SLPM-66302 | Story text, speakers, choices; routes can be marked |
 | ドラゴンクエストV 天空の花嫁 | SLPM-65555 | Message window, speakers |
 | サイレントヒル2 | SLPM-65051 | Scene text and descriptions |
 | EVE burst error PLUS | SLPM-65320 | Message window |

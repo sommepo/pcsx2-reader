@@ -554,6 +554,21 @@ void ReaderSession::HandleLine(const TextLine& line, qint64 now) {
         return;
     }
     const quint64 for_generation = generation.load();
+    if (line.IsMenu()) {
+        // Not read: only placed on the screen, for a click to pick an entry.
+        PresentedLine presented;
+        presented.line = line;
+        presented.backlog_id = -1;
+        QMetaObject::invokeMethod(
+            this,
+            [this, presented, for_generation] {
+                if (for_generation == generation && !presented.line.window.isEmpty()) {
+                    AdoptWindowLine(presented);
+                }
+            },
+            Qt::QueuedConnection);
+        return;
+    }
     if (last_line && last_line->source_id == line.source_id &&
         last_line->channel == line.channel && last_line->text == line.text &&
         now - last_line->timestamp < DuplicateWindowMs) {

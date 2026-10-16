@@ -43,7 +43,11 @@ struct TextLine {
     /// What the game shows the text in, when its profile reports where text is on screen.
     QString window;
 
+    /// A choice's answers, or a game's menu: what a click picks from when playing by touch.
     [[nodiscard]] bool IsChoice() const;
+    /// A game's menu (EVE's commands): pickable like a choice's answers, but not read, so it
+    /// stays out of the statistics, the backlog and the reader's window.
+    [[nodiscard]] bool IsMenu() const;
 
     /// Text with readings in Anki's furigana syntax: " 漢字[かんじ]".
     [[nodiscard]] QString ToAnkiFurigana() const;
@@ -69,6 +73,7 @@ struct TextLine {
 
 [[nodiscard]] QString ChannelDialogue();
 [[nodiscard]] QString ChannelChoice();
+[[nodiscard]] QString ChannelMenu();
 
 [[nodiscard]] QString EscapeHtml(const QString& text);
 /// Like Java's offsetByCodePoints, but clamps to the end of the string.

@@ -45,6 +45,7 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 #include "reader/qt/host.h"
+#include "reader/core/engine.h"
 #include "reader/desktop/anki.h"
 #include "reader/desktop/card_builder.h"
 #include "reader/qt/lookup_flow.h"
@@ -1019,6 +1020,8 @@ void ReaderSettingsDialog(QWidget* parent) {
     QFormLayout* text = section(Tr("Looking words up"));
     check(text, Tr("Click words in the game's own text"), Settings::KeyScreenText,
           settings.ScreenText());
+    check(text, Tr("Play by touch: beside the text goes on, an answer is picked"),
+          Settings::KeyTouchPlay, settings.TouchPlay());
     choice(text, Tr("By pointing at a word"), Settings::KeyHoverLookup,
            {{Tr("Off"), QStringLiteral("off")},
             {Tr("While Shift is held"), QStringLiteral("shift")},
@@ -1032,6 +1035,17 @@ void ReaderSettingsDialog(QWidget* parent) {
          settings.PopupAutoHideSeconds(), 0, 120, Tr(" s left alone (0: it stays)"));
     check(text, Tr("Close the popup when the pointer leaves its word and the popup"),
           Settings::KeyPopupHideOnExit, settings.PopupHideOnExit());
+    choice(text, Tr("Where the add button stands"), Settings::KeyCardCorner,
+           {{Tr("Bottom left"), QStringLiteral("bottom_left")},
+            {Tr("Bottom right"), QStringLiteral("bottom_right")},
+            {Tr("Top left"), QStringLiteral("top_left")},
+            {Tr("Top right"), QStringLiteral("top_right")}},
+           settings.CardCorner());
+    choice(text, Tr("Mark the word looked up"), Settings::KeyWordMark,
+           {{Tr("Outline"), QStringLiteral("outline")},
+            {Tr("Highlight"), QStringLiteral("highlight")},
+            {Tr("Not at all"), QStringLiteral("none")}},
+           settings.WordMark());
     check(text, Tr("Outline what can be clicked"), Settings::KeyScreenTextOutline,
           settings.ScreenTextOutline());
 
@@ -1174,6 +1188,122 @@ void ReaderSettingsDialog(QWidget* parent) {
 }
 
 } // namespace
+
+// ---- Progress set by hand (reader.progress) ----
+
+/// The routes (or whatever else the game's script offers to mark) with a box each: for
+/// progress made in another copy of the game. A box changed is written into the game's memory
+/// at once by the script; the game keeps it as it keeps its own progress (the note says how).
+void ProgressWindow(QWidget* parent) {
+    auto& engine = Reader::Engine::Instance();
+    std::optional<Reader::ProgressList> list = engine.Progress();
+    if (!list || list->items.empty()) {
+        QMessageBox::information(parent, Tr("Progress"),
+                                 Tr("The game's script offers nothing to mark."));
+        return;
+    }
+    QDialog dialog(parent);
+    dialog.setWindowTitle(list->title.empty() ? Tr("Progress")
+                                              : QString::fromStdString(list->title));
+    dialog.resize(560, 640);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* intro = new QLabel(Tr("Tick what you have finished elsewhere. The game's own progress "
+                                "is changed at once."));
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+
+    auto* tree = new QTreeWidget;
+    tree->setHeaderHidden(true);
+    tree->setRootIsDecorated(false);
+    QFont tree_font = tree->font();
+    tree_font.setFamilies(Style::JapaneseFamilies());
+    tree->setFont(tree_font);
+    layout->addWidget(tree, 1);
+
+    auto* note = new QLabel(QString::fromStdString(list->note));
+    note->setWordWrap(true);
+    note->setVisible(!list->note.empty());
+    layout->addWidget(note);
+    auto* status = new QLabel;
+    status->setWordWrap(true);
+    layout->addWidget(status);
+
+    QHash<QString, QTreeWidgetItem*> rows;
+    QHash<QString, QTreeWidgetItem*> groups;
+    for (const Reader::ProgressItem& item : list->items) {
+        QTreeWidgetItem* under = nullptr;
+        if (!item.group.empty()) {
+            const QString group = QString::fromStdString(item.group);
+            under = groups.value(group);
+            if (!under) {
+                under = new QTreeWidgetItem(tree, QStringList{group});
+                under->setFlags(Qt::ItemIsEnabled);
+                QFont bold = tree_font;
+                bold.setBold(true);
+                under->setFont(0, bold);
+                groups.insert(group, under);
+            }
+        }
+        auto* row = under ? new QTreeWidgetItem(under) : new QTreeWidgetItem(tree);
+        row->setText(0, QString::fromStdString(item.label));
+        row->setData(0, Qt::UserRole, QString::fromStdString(item.id));
+        row->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+        row->setCheckState(0, item.done ? Qt::Checked : Qt::Unchecked);
+        rows.insert(QString::fromStdString(item.id), row);
+    }
+    tree->expandAll();
+
+    // A mark may change others (a route's light, say): every box shows the game's state.
+    bool refreshing = false;
+    const auto refresh = [&] {
+        const auto now = engine.Progress();
+        if (!now) {
+            return;
+        }
+        refreshing = true;
+        for (const Reader::ProgressItem& item : now->items) {
+            if (QTreeWidgetItem* row = rows.value(QString::fromStdString(item.id))) {
+                row->setCheckState(0, item.done ? Qt::Checked : Qt::Unchecked);
+            }
+        }
+        refreshing = false;
+    };
+    QObject::connect(tree, &QTreeWidget::itemChanged, &dialog,
+                     [&](QTreeWidgetItem* row, int) {
+                         if (refreshing) {
+                             return;
+                         }
+                         const QString id = row->data(0, Qt::UserRole).toString();
+                         if (id.isEmpty()) {
+                             return;
+                         }
+                         const bool done = row->checkState(0) == Qt::Checked;
+                         std::string error;
+                         if (engine.MarkProgress(id.toStdString(), done, error)) {
+                             status->setText((done ? Tr("Marked finished: %1")
+                                                   : Tr("Marked not finished: %1"))
+                                                 .arg(row->text(0)));
+                         } else {
+                             status->setText(Tr("Not changed: %1")
+                                                 .arg(QString::fromStdString(error).left(200)));
+                         }
+                         refresh();
+                     });
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    dialog.exec();
+}
+
+bool ProgressOffered() {
+    const auto list = Reader::Engine::Instance().Progress();
+    return list && !list->items.empty();
+}
+
+void RunProgressDialog(QWidget* parent) {
+    ProgressWindow(parent);
+}
 
 void RunBacklogDialog(QWidget* parent) {
     Backlog(parent);

@@ -35,6 +35,13 @@ int CallHook(lua_State* L);
 /// lua_CFunction (chunk): calls it and returns its results as one tab-separated string.
 int CallAndFormat(lua_State* L);
 
+/// lua_CFunction (spec, ProgressList* as light userdata): fills the list from the table that
+/// reader.progress was given, calling its done(id) for every item.
+int CollectProgress(lua_State* L);
+
+/// lua_CFunction (spec, id, done): calls spec.mark(id, done).
+int CallMark(lua_State* L);
+
 /// Message handler for lua_pcall that appends a stack traceback.
 int Traceback(lua_State* L);
 

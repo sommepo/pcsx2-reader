@@ -84,6 +84,18 @@ void OnPadInput(unsigned controller, unsigned bind, float value);
 
 /// Writes the console's main memory to a file, as it is at this moment.
 bool DumpMemory(const std::string& path);
+
+// For the harness: a save state slot (1 to 10) written or loaded, the speed limit off (turbo)
+// or on, the game held or let go. Run on the emulator's thread.
+void SaveStateSlot(int slot);
+bool LoadStateSlot(int slot);
+void SetTurbo(bool on);
+void SetPaused(bool paused);
+/// The GS's memory read as one 4-bit texture 1024 wide from block 0, a byte a pixel, to a file
+/// (for finding a game's font): false when there is no GS.
+bool DumpVram4(const std::string& path);
+/// The IOP's main memory (2 MB), to a file.
+bool DumpIopMemory(const std::string& path);
 /// Runs something on the emulator's own thread, between two stretches of the game's code.
 void RunOnEmulator(std::function<void()> work);
 

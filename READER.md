@@ -11,7 +11,7 @@ same look.
 fork's. If a file `MAINTAINER.md` exists (the maintainer's own checkout), read it after this
 one.
 
-## State (2026-10-14): the interface, fourteen games, a Windows build nobody has run
+## State (2026-10-15): the interface, seventeen games, a Windows build nobody has run
 
 **What is there** is the app's face and the reader's windows: the PS2-style menu in place of
 the game list, the console's colours in every window, the reader's menu and its windows
@@ -19,20 +19,33 @@ the game list, the console's colours in every window, the reader's menu and its 
 layer over the game's picture, and under them a text engine that loads a game's profile and
 runs it once a frame.
 
-**Fourteen games can be read**: ひぐらしのなく頃に祭 カケラ遊び (SLPM-66913), Remember11
+**Seventeen games can be read**: ひぐらしのなく頃に祭 カケラ遊び (SLPM-66913), Remember11
 (SLPM-65550), Ever17 Premium Edition (SLPM-65421), Never7 (SLPS-25256), ペルソナ4
 (SLPM-66978), and since 2026-10-14 ペルソナ3 (SLPM-66445), ドラゴンクエストV (SLPM-65555),
 サイレントヒル2 (SLPM-65051), 真・女神転生III マニアクス (SLPM-65462), DIGITAL DEVIL
 SAGA (SLPM-65597), アマガミ (SLPS-25918), EVE burst error PLUS (SLPM-65320), うたわれるもの
-散りゆく者への子守唄 (SLPS-25679) and シャドウハーツ (SLPS-25041). The two ペルソナ, 真・女神転生III and DIGITAL DEVIL SAGA each need a
+散りゆく者への子守唄 (SLPS-25679) and シャドウハーツ (SLPS-25041), and since 2026-10-15 METAL GEAR
+SOLID 2 SUBSTANCE (SLPM-67002), METAL GEAR SOLID 3 SNAKE EATER (SLPM-65790) and CLANNAD
+(SLPM-66302), whose routes finished elsewhere can be marked ("Routes finished elsewhere"). The two
+ペルソナ, 真・女神転生III, DIGITAL DEVIL SAGA and the two METAL GEAR SOLIDs each need a
 character table that is not in Git (see "Games"). See "Games" below for what of each is read
 and what is not.
 
-**Looked at and not readable** (2026-10-14): ファイナルファンタジーXII (SLPM-66320, program
-280AD120) and METAL GEAR SOLID 3 (SLPM-65790, program 0481AD8A). Both start and play here;
-neither keeps its text in Shift-JIS or in any order of characters that follows it, and the
-text on the screen (a menu's help) was not found in memory by its shape either, in one
-byte or two a character. Nothing more is known of their formats.
+**Looked at and not readable** (2026-10-14, again 2026-10-15): ファイナルファンタジーXII (SLPM-66320,
+program 280AD120). It starts and plays here. What is known (2026-10-15, from the prologue's
+tutorial and Basch's lines): hiragana are one byte, the code point less 0x3003 (て is 0x63),
+katakana one byte from 0x91 (ァ) on, a line break is 02, commands begin with 0F, and kanji
+and some signs are two bytes with a first byte from 0x10 to 0x1F (、 is 10C3, 。 10C4), in an
+order of the game's own that looks like the order kanji first appear in the script (確認 is
+1221 1222, 帝国兵 10E9 10E3 10EA). So a profile needs a table of those codes. Not found: the
+menus' font is in the GS's memory (a 640-wide 4-bit sheet, cells 20 by 23, kanji in tiers
+sorted by reading), but no table from codes to its cells was found; the message font is
+drawn into a cache in the GS's memory as two-bit layers, glyph by glyph, and where it comes
+from was not found in the EE's or the IOP's memory in a plain one-, two- or four-bit form
+(probably compressed). The text renderer's code was not found. The harness can now dump the
+GS's memory (`vram PATH`) and the IOP's (`iop PATH`) for whoever goes on. METAL GEAR SOLID 3,
+said here on 2026-10-14 to be unreadable, was a misreading: its kana are in Unicode's order
+two bytes apart, which the search did not try (see "Games").
 ウォレスとグルミット 野菜畑で大ピンチ！ (SLPM-66327, program 3C38D7E1) keeps its text in UTF-16,
 but here its films draw black and silent and after the opening one the game goes back to its
 title (also with the Skip MPEG game fix), so no text of the game proper was reached; set
@@ -51,7 +64,7 @@ memory card notice comes up; paused at the maintainer's word before its text was
   seen to hold the game's sound), but no card was made with it: whether the piece cut for a
   line is that line's voice is not known.
 - **The controller**: the reader can press the console's buttons and rest its sticks
-  (`Reader::Emu::PressButton`, `RestSticks`; the harness uses the first), but the cursor
+  (`Reader::Emu::PressButton`, `RestSticks`; the harness and touch play use the first), but the cursor
   steered with the sticks and the button that pauses the statistics were not tried, and the
   input filter does not take a pad's input away from the game.
 - **The Browser's "Options"** (△; the Menu key or a right click on a game) is shown and
@@ -177,7 +190,7 @@ repository (`~/.local/share/ps2-reader`), without root:
 
 ```sh
 tools/reader/build-desktop.sh         # build-desktop/bin/pcsx2-qt
-tools/reader/test-desktop.sh          # tests of the reading logic (107)
+tools/reader/test-desktop.sh          # tests of the reading logic (118)
 tools/reader/desktop.sh &             # run it without a display (Qt's "offscreen")
 python3 tools/reader/dc.py home "home-key Down" "home-key Return" "home-grab private/desktop/shots/a.png"
 tools/reader/desktop-stop.sh
@@ -217,6 +230,12 @@ tools/reader/desktop-stop.sh
 `pad NAME [ms]` presses a button of the first controller (`up right down left triangle
 circle cross square select start` and the shoulder buttons); `lua CODE` runs a piece of Lua
 in the engine. Paths are absolute: the app's working folder is `private/desktop`.
+`state save N` / `state load N` write and load save state slot N (1 to 10) of the running
+game, `speed turbo` / `speed normal` take the speed limit off and put it back, `pause on` /
+`pause off` hold the game and let it go (the keyboard's hotkeys do not reach the emulator
+through this channel); `vram PATH` writes the GS's memory read as one 4-bit texture 1024 wide
+(a byte a pixel: each 128 by 128 page is right whatever the texture's real width), `iop PATH`
+the IOP's 2 MB.
 
 ### On a bare X11 window manager (Batocera)
 
@@ -286,6 +305,83 @@ reported (0 to 33 characters counted for the run). A press of □ during a run s
 Started in the game's save menu by mistake, it saved into the first slot until the time
 without text was up. **Not tried**: the other games, Windows, the back buttons for it.
 
+## Routes finished elsewhere (2026-10-15)
+
+For someone who has read part of a visual novel in another copy of it (the maintainer: CLANNAD
+on Steam) and wants this copy to know: a game's script may offer the game's own progress to be
+set by hand, and *Reader, Routes and progress…* (enabled while such a game runs; the
+development channel's `progress` lists, `progress ID on|off` marks) shows each thing with a box.
+A box changed is written into the game's memory at once by the script; the game keeps it as it
+keeps its own progress, and the window's note says how (CLANNAD: its system data, saved from
+its menu or after an ending). The profile API (`reader.progress{title, note, items = {{id,
+label, group}...}, done = f(id), mark = f(id, on)}`; `mem.w8`, `w16`, `w32`) is version 2 of
+the scripts' API (`-- reader: api 2`): an older app shows such a script as needing a newer app.
+**A script writes the game's memory only from its `mark`**: anywhere else `mem.w16` is an
+error, and the window is the only caller (the game is paused while it is open). Main memory
+only, above the kernel's first megabyte. `Engine::Progress`, `Engine::MarkProgress`,
+`LuaApi::CollectProgress`; tests with made-up memory in `reader/desktop/tests/progress_test.cpp`.
+
+**A game's own card is now made formatted** (`FormatCard` in `reader/core/emulator.cpp`): the
+emulator's new cards are blank, which most games format when they first save, but CLANNAD only
+says the card is not formatted and saves nothing. The superblock, the indirect FAT list, the
+FAT and an empty root folder are written as the console writes them (the superblock page and
+its ECC came out byte for byte those of a card the console had formatted). A card made before
+stays as it is.
+
+## Playing by touch (2026-10-16)
+
+For a Windows tablet without a controller (and the same in ARMSX2 Reader on a phone): *Reader
+settings, Play by touch* (`reader_touch_play`; **off at first on a computer**, and on Android on
+at first only on a device without game controls of its own: "thor and desktop never needs it, only the fold does", and for the games where a tap cannot pick an answer "can a lightweight controller over lay be build instead ... just buttons that absolutely need to be used" (the maintainer, 2026-10-16)), for the games whose
+script says **`-- reader: touch press`** among its first lines. In such a game a click or a tap
+on the game's picture beside any text, or in a message's box beside its words, presses ○ (the
+game goes on); a click on an answer of a choice moves the game's cursor there with the d-pad, one
+press every quarter of a second while the script reports where the cursor is, then presses ○; a
+press held half a second on an answer looks its word up instead; with the popup open a click
+only closes it. While a choice is up a click beside it does nothing (○ would confirm whatever is
+lit). If two presses of the d-pad leave the cursor where it was, something else has the input
+(a message over the choice): ○ is pressed once and the picking goes on, 48 presses at most.
+A game whose script says nothing is not played by touch: its clicks are as they always were
+(the role-playing games, where a stray ○ is not wanted). `-- reader: touch game` is the
+siblings' word for a game that takes touches itself; no PS2 game does. Words are still looked up
+with a click on them outside a choice, and by pointing (Shift) as before.
+
+**The script's side**: `reader.cursor(index [, "horizontal"])` says which answer of the choice on
+the screen the game's cursor is on, from 0, and -1 while it is on none yet; `reader.cursor(nil)`
+once the choice has gone (a script loaded anew starts with none). "horizontal" is for answers
+side by side (left and right move the cursor). A script that reports choices but not the cursor
+gets a message instead of a pick ("its script does not say where the cursor is"). A script calls
+it as `if reader.cursor then reader.cursor(at) end`, so an older app runs it as before (no new
+API version). `Engine::Cursor`, `LuaApi` `ReaderCursor`; the development channel's `cursor`
+says what the script reports. `reader/qt/reader_controller.cpp` (`PlayingByPresses`, `GoOn`,
+`PickAnswer`, `PickStep`; the PPSSPP Reader fork's, with the PS2's pad numbers) does it here.
+
+**The games** (each cursor found in the game's memory in the harness, below): Never7, Ever17,
+Remember11, CLANNAD and アマガミ report the cursor; in all five ○ picks nothing until the d-pad
+has put the cursor on an answer (the first press puts it on the first answer). ひぐらしのなく頃に祭 and
+EVE burst error PLUS say `touch press` too: a tap goes on, but their choices are not reported
+(see each under "Games"; EVE's command menus are, as a `menu`), so their scripts also say
+**`-- reader: buttons ...`**: the buttons ARMSX2 Reader shows as a column of round buttons at the screen's right
+edge while Play by touch is on (▲ ▼ for a choice or a command list, ○, × to back out, △ the
+game's menu: EVE's system menu, ひぐらし's message browser; each found in the harness, 2026-10-16).
+The five that report their cursor name buttons too (2026-10-16, after ARMSX2 Reader on a phone stopped at Never7's title): each title wants START, which ○ is not, and each has its save and load menu on a button of its own: Never7 and Ever17 `start select up down circle cross`, Remember11 and CLANNAD `start square up down circle cross`, アマガミ `start triangle up down circle cross`, with ○ in every column (EVE's is `circle cross triangle`): on a phone, at Never7's LOAD MENU, × only backed out and nothing chose (each script's notes say what its other buttons do). The desktop app does not draw them. うたわれるもの was taken out (its battles are long play, not
+reading). Not the role-playing and action games.
+
+**Checked** (2026-10-16): tests with made-up memory for each script's rules and the API
+(`reader/desktop/tests/touch_play_test.cpp`, `[touch]`), the catalogue's line and the setting
+(`catalog.cpp`). The app on Linux, drawn in software, by the development channel's `click`,
+`press` and `release` on the game's surface (where a real pointer's events arrive): in Never7
+and CLANNAD at a choice with no answer lit, a click beside the answers changed nothing, a click
+on the second answer picked it (Never7's answer went on to its own line; CLANNAD's story
+variable F1089, where the game keeps the answer picked, became 1), clicks on the picture went
+on through the messages after it; in Never7 a press held 0.8 s on an answer opened its word's
+entry and picked nothing. The same press sequence as the apps' (`private/touch/pick.sh` in the
+maintainer's checkout: the cursor read, a press of the d-pad, 250 ms, again) picked each
+answer of a choice of two in Never7, Ever17 and CLANNAD and of three in Remember11, each going
+on with that answer's own text; in アマガミ's first choice (three answers, reached from a new
+game) the cursor followed the d-pad and a click on the first answer picked it. **Not tried**: Windows, a real touch screen (Qt hands a touch
+to the window as a mouse press, which is what was sent), the other four games' taps in play.
+
 ## The Steam Controller without Steam (Windows)
 
 To Windows the Steam Controller (2026) is no gamepad by itself: left alone it plays keyboard
@@ -348,7 +444,8 @@ is this logic in Kotlin): a change to the format goes to both, and to `scripts-i
 display (`screen.sh`), its memory looked at (`dc.py dump`), the profile tried as it grows
 (`dc.py "profile PATH"`), its reports read against pictures of the game. It holds addresses
 and decoding logic only. It begins with the lines the app shows (`-- reader: title`, `reads`,
-`version`; `no hooks` for one that reads memory each frame, as all here do) and refuses any
+`version`; `no hooks` for one that reads memory each frame, as all here do; `touch press` for a
+visual novel played by touch, "Playing by touch") and refuses any
 other program than its disc's (`reader.build_id`).
 
 Checked (2026-10-14): `[scripts]` tests with made-up scripts (the list read, the states, a
@@ -375,6 +472,8 @@ speaker, a message in several parts, words with furigana, the cells on their cha
 **Not looked at**: choices, the TIPS, the backlog and the menus of the game (their text is
 not read), whether a part is still reported while the text window is hidden or the game
 skips, the other chapters, a savestate loaded in the middle of a message.
+**Touch play** (2026-10-16): the script says `touch press`, so a tap beside the text goes on
+(○); its choices are not reported, so an answer is picked with the controller. Not tried in play.
 
 **Remember11 -the age of infinity-** (`SLPM-65550.lua`, program B33522CD, disc version 1.02)
 and **Ever17 -the out of infinity- Premium Edition** (`SLPM-65421.lua`, program C577D399,
@@ -395,6 +494,11 @@ never met), a line break inside a message, coloured or large text, the TIPS and 
 shortcut/menu screens (not read), choices with more rows than three or a time limit,
 characters from the second half of Shift-JIS in a choice (their columns are guessed at),
 what happens while the game skips, a loaded save or savestate, anything past the opening.
+**Touch play** (2026-10-16, "Playing by touch"): the cursor is a byte a little before the
+answers' count (Ever17 0xC2B572, Remember11 0xB17DCA; the count of the answers drawn is the byte
+after it): 0xFF until the d-pad is first pressed, then the answer from 0, kept after the choice.
+Seen in each game's first choice from a new game (two answers in Ever17, three in Remember11):
+the byte following the d-pad, both ways round, and each answer picked by the apps' presses.
 
 **Never7 -the end of infinity-** (`SLPS-25256.lua`, program 9D260CAF, disc version 1.01).
 An older engine of the same house, and nothing like the two above. The game keeps the rows it
@@ -417,8 +521,28 @@ mode in the harness (△ leaves it).
 Since 2026-10-14 (while going on to the next choice, above): the list full and moving, the
 first days to Yuka's tennis and the evening after, choices of two, three and four answers
 (the height of three and four is guessed from two; the cells were not looked at).
-**Not looked at**: other half-width characters than those met, a loaded save, the game's
-own skipping, the append scenarios.
+**The page** (2026-10-16): some narration fills the screen instead of the box (the
+earthquake at 11:17 on the 4th, for one). The rows' pitch at 0x3A08D0 tells the two apart (28
+in the box, 29 on the page); the page's rows begin at 81 (measured) and it holds 12. Until then
+the profile put the page's earlier messages below the picture and only the last could be
+pointed at. The page also breaks rows its own way: the list keeps the box's rows, but the page
+draws at most 24 characters to a row whatever their width and gives the rest to the next row,
+with a character that may not begin a row (』, ー, small kana...) taking the one before it
+along. Seen on Linux from a save of the maintainer's (4/4, 10:49) through the earthquake page
+and the pages after it: every message of a page reported, the cells on their characters
+(also the rows broken again), a word in an earlier message of the page clicked and looked up,
+the box after the page as before. **Not looked at**: a message whose last row gives characters
+away (drawn here on a row of its own below; never met), a pause in the middle of a row on the
+page, a speaker on the page.
+**Not looked at**: other half-width characters than those met, the game's own skipping, the
+append scenarios.
+**Touch play** (2026-10-16, "Playing by touch"): the cursor is the 16-bit number at 0x53D896,
+the answer from 1, 0 until the d-pad is first pressed at a choice (the game sets 0 for each), and
+the answers' count is at 0x53D890. Seen from a new game through fourteen choices (two, three and
+four answers: the tennis and the drinks) and at three later ones from a save (4/4): the number
+following the d-pad both ways; picked by clicks and by the apps' presses. The choice's box word
+(0x397F4C) stays set through the credits after an ending, so the last choice's answers still
+count as up there (a tap on one presses the d-pad and ○ in the credits, harmless; not mended).
 
 **ペルソナ4** (`SLPM-66978.lua`, program 4E63E63C). The first game here that is not a visual
 novel. Its messages are Atlus's message files (commands that begin with a byte from 0xf0 on,
@@ -552,6 +676,15 @@ lines without a voice); **the present form has met neither**.
 game's topics. **Not looked at**: anything past the first classroom scene, a loaded save,
 skipping, what the profile costs on a slow device (it reads some 250 KB of memory every
 fourth frame while a message is up).
+**Touch play** (2026-10-16, "Playing by touch"): the game keeps no number for the cursor that
+could be found (only in short-lived objects), so the script looks at what is drawn: the bar that
+lights an answer is a plain item of the draw list, 560 by 36 in the picture, over the answer's
+row, and there is none until the d-pad is first pressed (○ picks nothing then). While a choice is
+reported the script looks for that item every fourth frame and says which answer's row is under
+it. Seen at the first choice of a new game (three answers, the evening at the hill's park): the
+answer following the d-pad, none before; a click on the first answer picked it (the next message
+was its thought). In the harness a choice is not made out after a save state is loaded at it (as
+before: nothing is learnt yet and the answers are short), so it was reached from a new game.
 
 **EVE burst error PLUS** (`SLPM-65320.lua`, program 8EC6655D). Plain Shift-JIS. The game
 copies a message into a buffer of its own (its parts with a NUL between them; an `s` before
@@ -567,6 +700,19 @@ Seen from a new game through the office and Akane's visit (some 90 messages): na
 speakers, voiced lines, messages in parts, the cells on their characters.
 **Not looked at**: the investigation's command menus (見る, 話す...) and choices, the second
 scenario (まりな), a loaded save, skipping.
+**Touch play** (2026-10-16): the script says `touch press`: a tap beside the text presses ○.
+**The command menus** (見る・調べる, 移動する, 話す and what each opens) are reported on the
+channel `menu` (the apps let a tap pick an entry but do not read it: no statistics, no backlog,
+no panel): the game runs a menu in a routine whose stack frame is always at the same place, with
+the count at 0x1FFE900, the entry lit at 0x1FFE920, the entries as pointers to the scene script's
+strings from 0x1FFEBF0 (each beginning with a full-width space) and the level at 0x1FFEA70 (0
+the first, 1 what an entry opens). The frame stays after the menu closes, so a menu counts as up
+only while the list's end (0x1FFE910) is where the count says and every entry is such a string.
+Places measured in pictures: the first level's rows from (53.8, 93.5) in the 640x448 picture, 24.2
+apart, 17.9 a character; the second level 60.4 right and 66.5 down; a third is guessed. Seen on
+Linux: the menus of the office and their second level reported, the cursor following the d-pad,
+the cells on the entries, a click on 移動する opening 外に出る with nothing counted. The script's
+buttons are now × (back out of a menu) and △ (the game's menu). Its story choices were not met.
 
 **うたわれるもの 散りゆく者への子守唄** (`SLPS-25679.lua`, program BF9554BE). Plain
 Shift-JIS. When a message comes up the game lays it out once into a list, 24 bytes a
@@ -580,6 +726,8 @@ messages): told and spoken text, speakers, a reading over a kanji, messages of t
 cells on their characters.
 **Not looked at**: the strategy battles and their text, choices, the menus, a loaded save,
 skipping.
+**Touch play** (2026-10-16): the script says `touch press`: a tap beside the text presses ○,
+also in a battle (where ○ carries out what is lit); choices are not reported. Not tried in play.
 
 **シャドウハーツ** (`SLPS-25041.lua`, program 3E46A5F0). Plain Shift-JIS with commands of
 three bytes that begin with `%`. Every window is an object kept by a window keeper; the
@@ -594,6 +742,113 @@ Seen from a new game through the train, the fight on its roof and the woods afte
 45 messages): speakers, messages of one to three rows, the cells on their characters.
 **Not read**: battles' help and menus (other keepers), the opening film's captions (part of
 the film). **Not looked at**: choices, shops, a loaded save.
+
+**METAL GEAR SOLID 2 SUBSTANCE** (`SLPM-67002.lua`, program CED0851A, disc version 1.01;
+Japanese subtitles). The first game here whose kanji have no codes at all. Text is two bytes a
+character: `80 xx` ASCII, `81 xx` hiragana and `82 xx` katakana in Unicode's order without
+ゐゑ/ヰヱ, `83 xx` signs of the game's own table (○△□× are the buttons); the 0x40 and 0x20 bits
+of the first byte only change the spacing. Each text resource (a codec conversation, a
+cutscene's or radio call's subtitles) brings the pictures of the kanji it uses (24 by 24, two
+bits a pixel, 144 bytes), and a kanji is the number of its picture there, 255 to a first
+byte (`8C`-`8F` in the codec, `90`-`93` in subtitles). So a kanji is known by its picture:
+**the profile needs a table** (`SLPM-67002.charset`: a hash of each picture and its
+character; not in Git, see "Ground rules"), made here from every picture in the game's files.
+The pictures are the same wherever a kanji is used, so 1,453 cover the game: those of the
+codec (CODEC.DAT, the second layer of the disc: a dual-layer image has a second directory at
+the layer's start, which the ISO's first one does not list), the cutscenes (DEMO.DAT,
+DEMO2.DAT), the radio calls (VOX.DAT, VOX2.DAT) and the films (MOVIE.DAT, MOVIEVR.DAT). They
+were matched against Noto Sans CJK Bold and MS Gothic and **every one then read by eye** on
+sheets and checked in its sentences (some 200 of the matcher's readings corrected); the
+whole script read back as sensible Japanese (6,139 different lines). `#{base、gloss}#`
+writes a gloss over a word (ペンタゴン over 国防総省): the base is what is read, a gloss in
+hiragana is its reading, a button's picture is read as its gloss (アクションボタン).
+Where the line on the screen is: the **codec** draws a line once, as the script command that
+shows it runs; that command's arguments (a pointer at 0x1C955C) are a tag, 0x4AB569, and the
+line, which must lie among the texts of the codec's block (header at 0x1C9288). **Subtitles**
+are an object with a list of entries (start, end, length, text) and the pictures after them;
+the pictures in use are at 0x191384, and the entry up is the one whose start and end hold
+the object's clock. The cells follow the game's own drawing (measured): 24 a character
+(ASCII from the game's table of widths), rows left-aligned in a block centred at 320, in
+which a row that ends in a line break counts 22 wider (so the codec's lines, which always end
+in one, centre at 309), the codec's rows from 263 every 33.75, subtitles' from 369 every 36.
+Subtitle rows have no punctuation between them, so they are joined with a space.
+Seen on Linux from a new game (Tanker) through the opening and the first codec calls on the
+deck (some 60 lines): the bridge and the deck's cutscenes, the radio conversation at the
+start, a call to Otacon (141.12) on the deck, glosses, a button in a line, the cells on
+their characters (a word pointed at was looked up, in the codec and in a cutscene).
+**Not read**: the menus, items' names and help, the briefing files, the dog tags, anything
+drawn as a picture (the help of the title's menus: their kanji are not in these fonts).
+**Not looked at**: the Plant chapter, Snake Tales (their text may be elsewhere), the codec's
+save conversations, a subtitle with three rows, the English text settings.
+
+**METAL GEAR SOLID 3 SNAKE EATER** (`SLPM-65790.lua`, program 0481AD8A). METAL GEAR SOLID
+2's text and drawing (read its paragraph), at this program's places; a change to one profile
+belongs in the other. The game's code is unpacked by a loader, so its places were found in
+memory (the glyph lookup at 0x11E1F0 gives the font table at 0x1D30E0, as 0x1166A8 does in
+METAL GEAR SOLID 2). Differences: the codec's command arguments are at 0x498CE0 (tag
+0x61D3F4), its block at 0x213A80; a subtitle object begins with 4, has its entries' length
+at +0x28 and the entries from +0x2C, an entry's length in the low half of its fourth word;
+the codec's rows start at 274.5, every 34. **Its table** (`SLPM-65790.charset`, not in Git):
+1,540 pictures, 1,218 of them the same as METAL GEAR SOLID 2's (the same font and drawing,
+bit for bit), the other 322 matched and read by eye on sheets, most checked in their
+sentences. **On the disc the codec's texts are enciphered** (a block's fifth word is
+0x41915525 until the game deciphers it in memory): the key stream is the same for every
+block, so the one met in memory deciphers 903 of the 963 banks offline; the 60 longest are
+not deciphered here (their pictures are plain, so their kanji are in the table, but three of
+them were read without a sentence to check them in: 慄, 膚, 禽). Nothing of this matters
+to the profile, which reads the deciphered text in memory.
+Seen on Linux from a new game: the opening's subtitles (the briefing in the plane, some 15
+lines), the first codec call after the landing (its lines with a gloss, 『』), the cells on
+their characters (a word pointed at was looked up, in the codec and in a subtitle).
+**Not read**: the menus (their help is in this encoding too and could be read: not done),
+the survival viewer, the camouflage index, item names and help. **Not looked at**: a
+subtitle of three rows, the radio calls while playing (VOX: the same object as subtitles),
+anything past the first codec call, the 60 large codec banks in play.
+
+**CLANNAD** (`SLPM-66302.lua`, program 7800DC84, disc version 1.01; HuneX's engine, not
+the PC's RealLive). VN Library's notes (`docs/formats-clannad-ps2.md` and the other
+`clannad-*.md` in the decompile repository) have the engine's format and the addresses of its
+state. The message is in one buffer (0x376F38) as the script has it: Shift-JIS, a speaker as
+`【name】` in front (drawn without the brackets, the name first on the row), `＊Ａ`, `＊Ｂ`... for
+the names the player gives (eight bytes each from 0x376CF8: 岡崎, 朋也 at first), `^` a line
+break; when a message goes on after a wait, the buffer grows and only what is new is reported.
+A message is reported when it has stood for four frames. Characters stand 23.6 apart, 23 to a
+row, rows 28.2 apart from (34, 334) in a picture 640 by 448 (measured); which characters may
+not begin a row is a guess (、。」 and small kana hang at the end). A choice (`SEL`): the bit 0x10
+of 0x3775B8 is set while it waits, its answers are buffers of 100 bytes from 0x377290 and their
+number is at 0x3775B0; they stand in the message window's rows. A `SEB` choice's answers are
+digits that pick texts from a table through story variables (the game's code at 0x14B344),
+which the profile does likewise (written, never met). In this game ○ picks the answer under the
+cursor at once, but going on to the next choice stopped with the choice up and nothing picked.
+**Routes** ("Routes finished elsewhere"): the global variables G (16 bits from 0x372F08) are
+the game's progress, kept in its system data: each route's ending sets a cell (VN Library's
+`clannad-menu.md` has which, from the script's own assignments: 渚 1, 風子 2, 智代 3, 杏 4,
+ことみ 5, 有紀寧 6 and its light 30, 春原 9, 勝平 12, 美佐枝 13, 幸村 15, 美佐枝's light in
+智代's route 31; AFTER STORY's lights 7, 8, 10, 11, 14, 33, its first ending 35, the true one
+45), G0 counts the lights and G73 is the title's stage (2 opens AFTER STORY). 椋's route sets
+no cell of its own and is not offered (AFTER STORY does not need it). Marking one sets its
+cells, counts its lights and raises the stage as the game's title does.
+Seen on Linux (2026-10-15): from a new game through the prologue, the walk to school and the
+classroom to the first choice (the tape recorder) and past it: told and spoken text, speakers
+(声, 教師, the player's name), a message that went on after a wait, a choice of two, the cells on
+their characters; the next choice from the classroom to that choice in 18 seconds (170 texts),
+stopped with the choice up and nothing picked. Then every School Life route marked through the
+development channel, the system data saved from the game's own menu (□, システムセーブ) onto a
+new card of its own, the emulator started anew: the game loaded its system data by itself and
+its title showed AFTER STORY, CG MODE and MUSIC MODE and eight lights.
+**Not looked at**: a SEB choice, a choice of three or more, a long message's row breaks (the
+23 is from one message), a name the player changed, the game's own skipping, AFTER STORY,
+the window on a computer that is not this one. In the harness, after a savestate is loaded the
+game draws only some characters of its text (the profile reads them all the same); text drawn
+straight over a picture (the prologue, the title's lights) has a black box behind it here,
+with the hardware renderer (the software one does not start on this machine).
+**Touch play** (2026-10-16, "Playing by touch"): the cursor is the 16-bit number at 0x60CDDA,
+the answer from 0, 0xFFFF until the d-pad first lights one (○ picks nothing before; a press of ○
+alone was tried). It lies in an object of the choice window's, not in the program's own data,
+but was at the same place in a new game started anew and in a save state of the day before.
+Seen at the first choice (the tape recorder): the number following the d-pad both ways, each
+answer picked by clicks and by the apps' presses, the story variable F1089 holding the answer
+picked; the next choice (謝っておく) began at 0xFFFF too. **Not looked at**: a choice of three or more, AFTER STORY.
 
 ## Windows
 
@@ -634,7 +889,7 @@ Windows computer. That it links and that its imports are satisfied is all that i
 
 ## How it was checked
 
-- **Logic**: 107 tests with made-up text (`tools/reader/test-desktop.sh`).
+- **Logic**: 118 tests with made-up text (`tools/reader/test-desktop.sh`).
 - **The app on Linux without a display** (2026-10-09): it starts into the PS2-style main
   menu; the keys move between its entries and into System Configuration and the Browser and
   back; System Configuration scrolls to its last line; the Browser with fourteen made-up

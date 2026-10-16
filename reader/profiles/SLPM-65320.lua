@@ -2,6 +2,8 @@
 -- reader: title EVE burst error PLUS
 -- reader: reads The message window: what is said and told, part by part as it comes up in full
 -- reader: version SLPM-65320, disc version 1.02
+-- reader: touch press
+-- reader: buttons circle cross triangle
 -- EVE burst error PLUS (Game Village, PS2, 2003), SLPM-65320. Program 8EC6655D.
 --
 -- Plain Shift-JIS. A message has the speaker in 【】 at its front and `s` at each wait. The
@@ -119,12 +121,88 @@ local function drop_all()
     parts = {}
 end
 
+-- The command menus (見る・調べる, 移動する, 話す and what each opens) for playing by touch.
+-- The game runs a menu in a routine whose frame is always at the same place on the stack:
+-- how many entries (MENU_COUNT), which one is lit (MENU_CURSOR, from 0), the entries as
+-- pointers to the scene script's strings (from MENU_LIST, each beginning with a full-width
+-- space) and the menu's level (MENU_LEVEL: 0 the first, 1 what an entry opens). The frame
+-- stays behind when the menu closes, so a menu counts as up only while its list's end
+-- (MENU_END) is where the count says and every entry is such a string. A menu is reported
+-- on the channel "menu": the apps let a tap pick its entries but do not read it (no
+-- statistics, no backlog). Places measured in pictures (2026-10-16), the second level's box
+-- below and right of the first; a third level, if any, is guessed from the two.
+local MENU_COUNT, MENU_END, MENU_CURSOR = 0x01ffe900, 0x01ffe910, 0x01ffe920
+local MENU_LIST, MENU_LEVEL = 0x01ffebf0, 0x01ffea70
+local MENU_X, MENU_Y, MENU_DX, MENU_DY = 53.8, 93.5, 60.4, 66.5
+local MENU_CELL, MENU_PITCH, MENU_HEIGHT = 17.9, 24.2, 22
+local menu_key = nil
+
+local function menu_entries()
+    local count = mem.u32(MENU_COUNT)
+    if not count or count < 1 or count > 8 then return nil end
+    if mem.u32(MENU_END) ~= MENU_LIST + 4 * count then return nil end
+    local level = mem.u32(MENU_LEVEL)
+    if not level or level > 3 then return nil end
+    local entries = {}
+    for n = 0, count - 1 do
+        local at = mem.u32(MENU_LIST + 4 * n)
+        if not at or at < 0x100000 or at >= 0x2000000 then return nil end
+        local raw = mem.read(at, 40)
+        raw = raw and raw:match("^[^%z]*")
+        -- Each entry begins with a full-width space, which is not drawn as text.
+        if not raw or raw:sub(1, 2) ~= "\x81\x40" or #raw < 4 then return nil end
+        entries[#entries + 1] = raw:sub(3)
+    end
+    return entries, level, mem.u32(MENU_CURSOR)
+end
+
+local function menu()
+    local entries, level, cursor = menu_entries()
+    if not entries then
+        if menu_key then
+            reader.layout("menu", nil)
+            reader.cursor(nil)
+            menu_key = nil
+        end
+        return
+    end
+    if cursor and cursor < #entries then reader.cursor(cursor) else reader.cursor(-1) end
+    local key = level .. ":" .. table.concat(entries, "|")
+    if key == menu_key then return end
+    menu_key = key
+    local b, glyphs = reader.builder(), {}
+    local x0, y0 = MENU_X + level * MENU_DX, MENU_Y + level * MENU_DY
+    for n, raw in ipairs(entries) do
+        if n > 1 then b:add("\n"); glyphs[#glyphs + 1] = false end
+        local x = x0
+        local y = y0 + (n - 1) * MENU_PITCH - MENU_HEIGHT / 2
+        local i = 1
+        while i <= #raw do
+            local c = raw:byte(i)
+            local len = ((c >= 0x81 and c <= 0x9f) or (c >= 0xe0 and c <= 0xfc)) and 2 or 1
+            local ch = raw:sub(i, i + len - 1)
+            b:add(text.sjis(ch))
+            local w = len == 2 and MENU_CELL or MENU_CELL / 2
+            glyphs[#glyphs + 1] = { x, y, w, MENU_HEIGHT }
+            x = x + w
+            i = i + len
+        end
+    end
+    reader.emit{ text = b:text(), speaker = "", window = "menu", channel = "menu",
+                 id = "menu:" .. text.hash(key) }
+    reader.layout("menu", { space = { 640, 448 }, glyphs = glyphs })
+end
+
 reader.on_state_loaded(function()
     drop_all()
     reported, last_key = 0, nil
+    if menu_key then reader.layout("menu", nil) end
+    menu_key = nil
+    reader.cursor(nil)
 end)
 
 reader.on_frame(function()
+    if reader.cursor then menu() end
     local chars = characters()
     if not chars then
         if #parts > 0 then drop_all() end

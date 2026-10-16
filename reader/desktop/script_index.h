@@ -22,7 +22,7 @@ namespace Scripts {
 
 /// The version of the profile API this app has (what `reader.*` offers a profile). A script
 /// says which it needs with the line `-- reader: api N`; one without it needs 1.
-inline constexpr int Api = 1;
+inline constexpr int Api = 2;
 
 /// Where the app fetches the list of scripts unless told otherwise (READER_SCRIPTS_URL).
 inline constexpr char DefaultIndexUrl[] =

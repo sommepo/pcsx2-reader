@@ -16,6 +16,10 @@ QString ChannelChoice() {
     return QStringLiteral("choice");
 }
 
+QString ChannelMenu() {
+    return QStringLiteral("menu");
+}
+
 QString EscapeHtml(const QString& text) {
     QString out;
     out.reserve(text.size());
@@ -79,7 +83,11 @@ int CodePointCount(const QString& text) {
 }
 
 bool TextLine::IsChoice() const {
-    return channel == ChannelChoice();
+    return channel == ChannelChoice() || channel == ChannelMenu();
+}
+
+bool TextLine::IsMenu() const {
+    return channel == ChannelMenu();
 }
 
 QList<TextLine::Segment> TextLine::Segments() const {

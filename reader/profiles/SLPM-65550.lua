@@ -2,6 +2,13 @@
 -- reader: title Remember11 -the age of infinity-
 -- reader: reads The story's text with speakers, each message as it has come up in full, and choices
 -- reader: version SLPM-65550, disc version 1.02
+-- reader: touch press
+-- reader: buttons start square up down circle cross
+-- Touch play's buttons (found in the harness, 2026-10-16): START at the title (○ does nothing
+-- there), up and down for the title's and the menu's lists, ○ to choose (a tap on the picture
+-- is ○ too, but a button is sure), × back out; □ the system menu
+-- (save, load), △ the message history, SELECT nothing.
+--
 -- Remember11 -the age of infinity- (KID, PS2, 2004), SLPM-65550. Program B33522CD.
 --
 -- Script text is Shift-JIS with %-commands. When a message starts, the game copies the text
@@ -28,6 +35,8 @@ local SHOWN = 128
 local ANSWERS = 0x00b17ea0     -- how many answers the choice on the screen has (0: none)
 local ANSWER_TEXT = 0x00b17ea8 -- the answers' texts, each in a buffer of its own
 local ANSWER_SIZE = 64
+local ANSWER_CURSOR = 0x00b17dca -- the answer the cursor is on, from 0; 0xff until the d-pad
+                               -- first puts it on one (○ picks nothing then). A byte
 local FONT_COLUMNS = 0x00870004 -- pointer to the font's table: two bytes for each character,
                                -- its glyph's first and last column, in the order of
                                -- Shift-JIS from 0x8140 on (188 to a lead byte)
@@ -138,8 +147,24 @@ local function choice()
     reader.layout("choice", { space = { 640, 448 }, glyphs = cells })
 end
 
+-- Touch play: which answer the cursor is on while a choice is up, -1 before the d-pad has put
+-- it on one; nothing once the choice has gone. An older app has no reader.cursor.
+local cursor_said
+local function report_cursor()
+    local at
+    local number = mem.u32(ANSWERS) or 0
+    if answers_shown and number >= 1 and number <= 8 then
+        at = mem.u8(ANSWER_CURSOR) or 0xff
+        if at >= number then at = -1 end
+    end
+    if at == cursor_said then return end
+    cursor_said = at
+    if reader.cursor then reader.cursor(at) end
+end
+
 reader.on_frame(function(frame)
     choice()
+    report_cursor()
     local count = mem.u32(COUNT)
     if not count or count == 0 or count > 400 then
         if shown_raw then reset() end

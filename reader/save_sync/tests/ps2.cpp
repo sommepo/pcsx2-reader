@@ -5,6 +5,7 @@
 // the game's ID, which holds its memory card. Made-up saves; the tests that need a service
 // are skipped without one (tools/reader/test-savesync.sh starts it).
 
+#include <algorithm>
 #include <cstdlib>
 #include <mutex>
 #include <random>
@@ -327,7 +328,9 @@ TEST_CASE("What the background did names its game", "[savesync][ps2]") {
     Host::SyncAll();
     REQUIRE(Host::Wait(10000));
     REQUIRE_FALSE(thor.Said().empty());
-    CHECK(thor.Said().back() == "Save sync: this device's save was sent. (" + disc + ")");
+    // Other games of the service (other tests') are fetched too: this game's line is among them.
+    const auto said = thor.Said();
+    CHECK(std::find(said.begin(), said.end(), "Save sync: this device's save was sent. (" + disc + ")") != said.end());
     CHECK(Host::Status() == thor.Said().back());
 
     // Once the game has been started here its name is known; and what is said at its own
@@ -342,3 +345,26 @@ TEST_CASE("What the background did names its game", "[savesync][ps2]") {
     CHECK(thor.Said().back() == "Save sync: this device's save was sent. (A made-up game)");
     Host::Shutdown();
 }
+
+TEST_CASE("A game saved on another device is fetched without starting it", "[savesync][ps2]") {
+    NEEDS_SERVICE();
+    const std::string disc = NewDisc();
+    Install thor{"Thor"};
+    thor.Save(disc, "chapter 3");
+    thor.Start();
+    Host::GameStarting(disc, "A made-up game");
+    Host::GameStopped();
+    REQUIRE(Host::Wait(10000));
+    Host::Shutdown();
+
+    // A device that never had the game: syncing everything brings its save in.
+    Install fold{"Fold"};
+    fold.Start();
+    Host::SyncAll();
+    REQUIRE(Host::Wait(20000));
+    const auto saves = fold.Saves();
+    REQUIRE(saves.count(disc + "/save.bin") == 1);
+    CHECK(saves.at(disc + "/save.bin") == "chapter 3");
+    Host::Shutdown();
+}
+

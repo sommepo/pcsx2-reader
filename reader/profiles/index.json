@@ -19,8 +19,8 @@
       "version": "SLPM-65320, disc version 1.02",
       "api": 1,
       "file": "SLPM-65320.lua",
-      "size": 6918,
-      "sha256": "ae7686a302abc51141f9c70cd108c9c7d50bed5a0b2cd8eadfbeca4c231e4ab5"
+      "size": 10508,
+      "sha256": "46489f82d181ea76e1f7388e3bb9b138dbfb0c4f8c089026e840a630f27b736b"
     },
     {
       "id": "SLPM-65421",
@@ -29,8 +29,8 @@
       "version": "SLPM-65421, disc version 1.01",
       "api": 1,
       "file": "SLPM-65421.lua",
-      "size": 9272,
-      "sha256": "25d16bdb9f02f368a3ae7dff78acf609a8c8ebdd3846c82964e03fba309327f9"
+      "size": 10419,
+      "sha256": "5db468de6a8a52cd497ba7dd5073746cd7367e5ab2b909591594af2997d903ce"
     },
     {
       "id": "SLPM-65550",
@@ -39,8 +39,8 @@
       "version": "SLPM-65550, disc version 1.02",
       "api": 1,
       "file": "SLPM-65550.lua",
-      "size": 9236,
-      "sha256": "00795ad14d1a379f2d40122b15ae71b275965e291915f746010162d85e19a59a"
+      "size": 10386,
+      "sha256": "e37dbca88acc91f807c61ace87c538782eb0f5c22bf48ae18eecb2e765f1e369"
     },
     {
       "id": "SLPM-65555",
@@ -53,14 +53,24 @@
       "sha256": "77c62895e14aad290e19319c38b0e5fd6f43b551d14e808a201eb7bc660dd9a3"
     },
     {
+      "id": "SLPM-66302",
+      "title": "CLANNAD",
+      "reads": "The story's text with speakers, each message as it comes up, and choices; finished routes can be marked",
+      "version": "SLPM-66302, disc version 1.01",
+      "api": 2,
+      "file": "SLPM-66302.lua",
+      "size": 15707,
+      "sha256": "d29afb4a053c370ddf5ee4d7db32b90719396e2d595e1082db0b3a08963b53c7"
+    },
+    {
       "id": "SLPM-66913",
       "title": "ひぐらしのなく頃に祭 カケラ遊び (Higurashi no Naku Koro ni Matsuri: Kakera Asobi)",
       "reads": "The story's text with speakers and furigana, part by part as it comes up",
       "version": "SLPM-66913, disc version 1.01",
       "api": 1,
       "file": "SLPM-66913.lua",
-      "size": 11250,
-      "sha256": "685d2933ca8b1e5b9c31dac6ce1064173c82644667e7f93298b24b8c446acf15"
+      "size": 11322,
+      "sha256": "af2d0b990619f18403cccebffbfa03544ade1be8b24566de48404fa0417a44ed"
     },
     {
       "id": "SLPS-25041",
@@ -79,8 +89,8 @@
       "version": "SLPS-25256, disc version 1.01",
       "api": 1,
       "file": "SLPS-25256.lua",
-      "size": 10178,
-      "sha256": "018c5e4f790d5f75fd2f924fbe38e6040e1fb424a5f12f7b9d4c2dbb39b5ebfc"
+      "size": 14464,
+      "sha256": "4179053da0be8c3649fdc6eded81820391e172139abfa555edc9432b4e51ed98"
     },
     {
       "id": "SLPS-25679",
@@ -99,8 +109,8 @@
       "version": "SLPS-25918",
       "api": 1,
       "file": "SLPS-25918.lua",
-      "size": 22964,
-      "sha256": "281cd4a8e3c8f8f356c4c591d96da98ba7b17616f2e2e9c17c8015e8273083de"
+      "size": 25416,
+      "sha256": "f6f285c9b1d94776775df9a05f4b3fd816367a74873d12092d96e5e1aa5bcf11"
     }
   ]
 }

@@ -511,7 +511,26 @@ void SyncAll() {
         if (!shared->engine.IsOn()) {
             return;
         }
-        shared->engine.SyncAll(GamesHere(*shared));
+        // Every game with a card here, and every PlayStation 2 game the service has a save of
+        // that this device has none of yet (a save made on another device is fetched without
+        // the game having to be started first). Asking the service waits: in the background.
+        Background(shared, [](Shared& s) {
+            std::vector<Game> games = GamesHere(s);
+            std::string error;
+            const auto none = [](const std::string&) { return std::vector<Folder>{}; };
+            for (const OverviewRow& row : s.engine.Overview(none, error)) {
+                const std::string disc = DiscOf(row.title);
+                if (disc.empty() || !row.head) {
+                    continue;
+                }
+                const bool here = std::any_of(games.begin(), games.end(),
+                                              [&](const Game& game) { return game.title == row.title; });
+                if (!here) {
+                    games.push_back(GameFor(s, disc, row.name));
+                }
+            }
+            s.engine.SyncAll(std::move(games));
+        });
     } catch (...) {
     }
 }

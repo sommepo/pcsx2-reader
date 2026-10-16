@@ -431,6 +431,9 @@ void Engine::UnloadProfileLocked() {
     has_hooks.store(!hooks.empty(), std::memory_order_relaxed);
     frame_callbacks.clear();
     state_callbacks.clear();
+    progress_ref = NoLuaRef;
+    writes_allowed = false;
+    cursor.reset();
     if (lua) {
         LuaApi::CloseState(lua);
         lua = nullptr;
@@ -580,13 +583,15 @@ void Engine::ClearNativeHooks() {
     }
 }
 
-void Engine::StartDetached(MemoryReader reader, const std::string& game_id_) {
+void Engine::StartDetached(MemoryReader reader, const std::string& game_id_,
+                           MemoryWriter writer) {
     StopDetached();
     std::scoped_lock lock{mutex};
     if (host) {
         return; // detached operation is for use without an emulated system
     }
     detached_memory = std::move(reader);
+    detached_writer = std::move(writer);
     game_id = game_id_;
 }
 
@@ -599,12 +604,94 @@ void Engine::StopDetached() {
     hooks.clear();
     has_hooks.store(false, std::memory_order_relaxed);
     detached_memory = nullptr;
+    detached_writer = nullptr;
     modules.clear();
     game_id.clear();
     frame = 0;
     picture = 0;
     next_sequence = 1;
     last_error.clear();
+}
+
+void Engine::SetProgress(int lua_ref) {
+    if (lua && progress_ref != NoLuaRef) {
+        luaL_unref(lua, LUA_REGISTRYINDEX, progress_ref);
+    }
+    progress_ref = lua_ref;
+}
+
+bool Engine::WriteMemory(u64 address, const std::string& bytes) {
+    std::scoped_lock lock{mutex};
+    if (!writes_allowed || bytes.empty()) {
+        return false;
+    }
+    if (detached_writer) {
+        return detached_writer(address, bytes);
+    }
+    return host && host->WriteMemory(address, bytes);
+}
+
+std::optional<Engine::AnswerCursor> Engine::Cursor() const {
+    std::scoped_lock lock{mutex};
+    return cursor;
+}
+
+void Engine::SetCursor(std::optional<AnswerCursor> cursor_) {
+    std::scoped_lock lock{mutex};
+    cursor = cursor_;
+}
+
+std::optional<ProgressList> Engine::Progress() {
+    std::scoped_lock lock{mutex};
+    if (!lua || progress_ref == NoLuaRef) {
+        return std::nullopt;
+    }
+    ProgressList list;
+    LuaApi::ResetBudget(lua, LuaApi::Budget::Load);
+    const int base = lua_gettop(lua);
+    lua_pushcfunction(lua, LuaApi::Traceback);
+    lua_pushcfunction(lua, LuaApi::CollectProgress);
+    lua_rawgeti(lua, LUA_REGISTRYINDEX, progress_ref);
+    lua_pushlightuserdata(lua, &list);
+    const int status = lua_pcall(lua, 2, 0, base + 1);
+    if (status != LUA_OK) {
+        const char* message = lua_tostring(lua, -1);
+        last_error = message ? message : "unknown Lua error";
+        Log(LogLevel::Error, std::format("progress failed: {}", last_error));
+        lua_settop(lua, base);
+        return std::nullopt;
+    }
+    lua_settop(lua, base);
+    return list;
+}
+
+bool Engine::MarkProgress(const std::string& id, bool done, std::string& error) {
+    std::scoped_lock lock{mutex};
+    if (!lua || progress_ref == NoLuaRef) {
+        error = "the game's script offers nothing to mark";
+        return false;
+    }
+    LuaApi::ResetBudget(lua, LuaApi::Budget::Load);
+    const int base = lua_gettop(lua);
+    lua_pushcfunction(lua, LuaApi::Traceback);
+    lua_pushcfunction(lua, LuaApi::CallMark);
+    lua_rawgeti(lua, LUA_REGISTRYINDEX, progress_ref);
+    lua_pushlstring(lua, id.data(), id.size());
+    lua_pushboolean(lua, done);
+    writes_allowed = true;
+    const int status = lua_pcall(lua, 3, 0, base + 1);
+    writes_allowed = false;
+    if (status != LUA_OK) {
+        const char* message = lua_tostring(lua, -1);
+        error = message ? message : "unknown Lua error";
+        last_error = error;
+        Log(LogLevel::Error, std::format("marking {} failed: {}", id, error));
+        lua_settop(lua, base);
+        return false;
+    }
+    lua_settop(lua, base);
+    Log(LogLevel::Info, std::format("progress {} marked {}", id, done ? "done" : "not done"));
+    return true;
 }
 
 void Engine::AddStateCallback(int lua_ref) {

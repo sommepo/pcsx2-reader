@@ -2,6 +2,8 @@
 -- reader: title ひぐらしのなく頃に祭 カケラ遊び (Higurashi no Naku Koro ni Matsuri: Kakera Asobi)
 -- reader: reads The story's text with speakers and furigana, part by part as it comes up
 -- reader: version SLPM-66913, disc version 1.01
+-- reader: touch press
+-- reader: buttons up down circle cross triangle
 -- ひぐらしのなく頃に祭 カケラ遊び (Alchemist, PS2, 2007), SLPM-66913. Program C08A36F0.
 --
 -- The whole script is in memory. A message is a string: speaker name, the letter r, then text

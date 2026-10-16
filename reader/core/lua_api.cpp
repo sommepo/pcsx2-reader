@@ -226,6 +226,38 @@ int ReaderOnStateLoaded(lua_State* L) {
     return 0;
 }
 
+/// reader.cursor(index [, "horizontal"]): which answer of the choice on screen the game's cursor
+/// is on, from 0 (-1 while it is on none yet); reader.cursor(nil) once there is no choice. What
+/// touch play turns a tap on an answer into presses of the d-pad with.
+int ReaderCursor(lua_State* L) {
+    if (lua_isnoneornil(L, 1)) {
+        GetEngine(L).SetCursor(std::nullopt);
+        return 0;
+    }
+    const lua_Integer index = luaL_checkinteger(L, 1);
+    luaL_argcheck(L, index >= -1 && index < 64, 1, "an answer from 0, or -1 for none");
+    const std::string_view way{luaL_optstring(L, 2, "vertical")};
+    luaL_argcheck(L, way == "vertical" || way == "horizontal", 2, "\"vertical\" or \"horizontal\"");
+    GetEngine(L).SetCursor(Engine::AnswerCursor{static_cast<int>(index), way == "horizontal"});
+    return 0;
+}
+
+/// reader.progress{title, note, items = {{id, label, group}...}, done = f(id), mark = f(id, on)}:
+/// progress of the game's own that the player may set by hand (Engine::Progress).
+int ReaderProgress(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_getfield(L, 1, "items");
+    luaL_argcheck(L, lua_istable(L, -1), 1, "items must be a list");
+    lua_getfield(L, 1, "done");
+    luaL_argcheck(L, lua_isfunction(L, -1), 1, "done must be a function");
+    lua_getfield(L, 1, "mark");
+    luaL_argcheck(L, lua_isfunction(L, -1), 1, "mark must be a function");
+    lua_pop(L, 3);
+    lua_pushvalue(L, 1);
+    GetEngine(L).SetProgress(luaL_ref(L, LUA_REGISTRYINDEX));
+    return 0;
+}
+
 /// reader.module(name): {base, size, build_id} of one of the game's executables, or nil.
 int ReaderModule(lua_State* L) {
     const std::string name = luaL_optstring(L, 1, "main");
@@ -506,6 +538,24 @@ int MemUnsigned(lua_State* L) {
     return 1;
 }
 
+/// mem.w8/w16/w32(address, value): only while the profile marks progress.
+template <std::size_t Size>
+int MemWrite(lua_State* L) {
+    const u64 address = CheckAddress(L, 1);
+    const lua_Integer value = luaL_checkinteger(L, 2);
+    Engine& engine = GetEngine(L);
+    if (!engine.WritesAllowed()) {
+        return luaL_error(L, "the game's memory is written only while progress is marked "
+                             "(reader.progress)");
+    }
+    std::string bytes(Size, '\0');
+    for (std::size_t i = 0; i < Size; ++i) {
+        bytes[i] = static_cast<char>((static_cast<u64>(value) >> (8 * i)) & 0xFF);
+    }
+    lua_pushboolean(L, engine.WriteMemory(address, bytes));
+    return 1;
+}
+
 int MemS32(lua_State* L) {
     const u64 address = CheckAddress(L, 1);
     const auto value = GetEngine(L).ReadU32(address);
@@ -619,14 +669,15 @@ const luaL_Reg ReaderFunctions[] = {
     {"emit", ReaderEmit},   {"log", ReaderLog},          {"warn", ReaderWarn},
     {"frame", ReaderFrame}, {"data", ReaderData},        {"layout", ReaderLayout},
     {"picture", ReaderPicture}, {"on_state_loaded", ReaderOnStateLoaded},
-    {nullptr, nullptr},
+    {"progress", ReaderProgress}, {"cursor", ReaderCursor}, {nullptr, nullptr},
 };
 
 const luaL_Reg MemFunctions[] = {
     {"u8", MemUnsigned<1>}, {"u16", MemUnsigned<2>}, {"u32", MemUnsigned<4>},
     {"u64", MemUnsigned<8>}, {"s32", MemS32},        {"f32", MemFloat<float>},
     {"f64", MemFloat<double>}, {"read", MemRead},    {"cstr", MemCstr},
-    {"wstr", MemWstr},      {nullptr, nullptr},
+    {"wstr", MemWstr},      {"w8", MemWrite<1>},         {"w16", MemWrite<2>},
+    {"w32", MemWrite<4>},   {nullptr, nullptr},
 };
 
 const luaL_Reg TextFunctions[] = {
@@ -860,6 +911,50 @@ int CallAndFormat(lua_State* L) {
     }
     luaL_pushresult(&buffer);
     return 1;
+}
+
+int CollectProgress(lua_State* L) {
+    auto* list = static_cast<ProgressList*>(lua_touserdata(L, 2));
+    lua_settop(L, 1);
+    list->title = SanitizeUtf8(FieldString(L, 1, "title"));
+    list->note = SanitizeUtf8(FieldString(L, 1, "note"));
+    lua_getfield(L, 1, "items"); // 2
+    lua_getfield(L, 1, "done");  // 3
+    const lua_Integer count = luaL_len(L, 2);
+    for (lua_Integer i = 1; i <= count && i <= 500; ++i) {
+        lua_geti(L, 2, i);
+        if (!lua_istable(L, -1)) {
+            return luaL_error(L, "progress item %d is not a table", static_cast<int>(i));
+        }
+        ProgressItem item;
+        const int at = lua_gettop(L);
+        item.id = SanitizeUtf8(FieldString(L, at, "id"));
+        item.label = SanitizeUtf8(FieldString(L, at, "label"));
+        item.group = SanitizeUtf8(FieldString(L, at, "group"));
+        lua_pop(L, 1);
+        if (item.id.empty()) {
+            return luaL_error(L, "progress item %d has no id", static_cast<int>(i));
+        }
+        lua_pushvalue(L, 3);
+        lua_pushlstring(L, item.id.data(), item.id.size());
+        lua_call(L, 1, 1);
+        item.done = lua_toboolean(L, -1);
+        lua_pop(L, 1);
+        if (item.label.empty()) {
+            item.label = item.id;
+        }
+        list->items.push_back(std::move(item));
+    }
+    return 0;
+}
+
+int CallMark(lua_State* L) {
+    lua_settop(L, 3);
+    lua_getfield(L, 1, "mark");
+    lua_pushvalue(L, 2);
+    lua_pushvalue(L, 3);
+    lua_call(L, 2, 0);
+    return 0;
 }
 
 int Traceback(lua_State* L) {

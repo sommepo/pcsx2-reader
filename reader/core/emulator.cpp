@@ -4,8 +4,10 @@
 // The one file that ties the text engine to the emulator.
 
 #include <algorithm>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -17,7 +19,10 @@
 #include "SIO/Pad/Pad.h"
 #include "SIO/Pad/PadDualshock2.h"
 #include "SIO/Memcard/MemoryCardFile.h"
+#include "SIO/Memcard/MemoryCardFolder.h"
 #include "VMManager.h"
+#include "MTGS.h"
+#include "GS/Renderers/Common/GSRenderer.h"
 #include "common/Console.h"
 #include "common/FileSystem.h"
 #include "common/Path.h"
@@ -64,6 +69,24 @@ public:
         }
         const std::size_t valid = std::min<std::size_t>(size, Ps2MemSize::ExposedRam - offset);
         return std::string(reinterpret_cast<const char*>(eeMem->Main + offset), valid);
+    }
+
+    bool WriteMemory(u64 address, const std::string& bytes) override {
+        // Data only, in main memory: what a profile marking progress writes (a game's own
+        // variables). Code written here would not reach what the recompilers already made of it.
+        if (address > 0xFFFFFFFFULL || !eeMem || bytes.empty()) {
+            return false;
+        }
+        const u32 start = static_cast<u32>(address);
+        if (start >= 0xC0000000 || (start >= 0x20000000 && start < 0x80000000)) {
+            return false;
+        }
+        const u32 offset = start & MainMemoryMask;
+        if (offset < 0x00100000 || offset + bytes.size() > Ps2MemSize::ExposedRam) {
+            return false;
+        }
+        std::memcpy(eeMem->Main + offset, bytes.data(), bytes.size());
+        return true;
     }
 
     void InvalidateCode() override {
@@ -190,6 +213,127 @@ void EnsureSaveSync() {
         device);
 }
 
+namespace {
+
+/// Formats a blank 8 MB card file as the console does: superblock, indirect FAT list, FAT and
+/// an empty root folder, each page with its ECC (the layout of the file system documented in
+/// pcsx2/Reference/PS2-MemoryCardFileSystem.htm; the values those of a card the console
+/// formatted). Only for a file that was just made blank.
+bool FormatCard(const std::string& path) {
+    constexpr u32 PageSize = 512;
+    constexpr u32 RawPage = 528;
+    constexpr u32 Clusters = 8192;
+    constexpr u32 FatClusters = 32;  // clusters 9 to 40
+    constexpr u32 AllocOffset = 41;
+    constexpr u32 AllocEnd = 8135;   // clusters to allocate, from AllocOffset
+    std::vector<u8> card(static_cast<std::size_t>(Clusters) * 2 * RawPage, 0xFF);
+    // Writes one page's data (512 bytes) and its spare area: ECC over each 128 bytes, then zeros.
+    const auto put_page = [&card](u32 page, const u8* data) {
+        u8* at = card.data() + static_cast<std::size_t>(page) * RawPage;
+        std::memcpy(at, data, PageSize);
+        u8 spare[16]{};
+        for (int i = 0; i < 4; ++i) {
+            FolderMemoryCard::CalculateECC(spare + i * 3, data + i * 128);
+        }
+        std::memcpy(at + PageSize, spare, sizeof(spare));
+    };
+    const auto put_cluster = [&put_page](u32 cluster, const std::vector<u8>& data) {
+        put_page(cluster * 2, data.data());
+        put_page(cluster * 2 + 1, data.data() + PageSize);
+    };
+    const auto set32 = [](std::vector<u8>& data, std::size_t at, u32 value) {
+        std::memcpy(data.data() + at, &value, 4);
+    };
+    const auto set16 = [](std::vector<u8>& data, std::size_t at, u16 value) {
+        std::memcpy(data.data() + at, &value, 2);
+    };
+
+    std::vector<u8> super(PageSize, 0xFF);
+    static constexpr char magic[] = "Sony PS2 Memory Card Format 1.2.0.0";
+    std::memset(super.data(), 0, 0x28);
+    std::memcpy(super.data(), magic, sizeof(magic) - 1);
+    set16(super, 0x28, PageSize);
+    set16(super, 0x2A, 2);    // pages a cluster
+    set16(super, 0x2C, 16);   // pages a block
+    set16(super, 0x2E, 0xFF00);
+    set32(super, 0x30, Clusters);
+    set32(super, 0x34, AllocOffset);
+    set32(super, 0x38, AllocEnd);
+    set32(super, 0x3C, 0);    // the root folder's cluster
+    set32(super, 0x40, 1023); // backup blocks
+    set32(super, 0x44, 1022);
+    std::memset(super.data() + 0x48, 0, 0x08);
+    std::memset(super.data() + 0x50, 0, 0x80);
+    set32(super, 0x50, 8);    // the indirect FAT list's cluster
+    std::memset(super.data() + 0xD0, 0xFF, 0x80); // no bad blocks
+    super[0x150] = 2;         // a PS2 card
+    super[0x151] = 0x2B;
+    static constexpr u8 tail[] = {0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+                                  0x08, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00,
+                                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                  0x41, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    std::memcpy(super.data() + 0x152, tail, sizeof(tail));
+    put_page(0, super.data());
+
+    std::vector<u8> ifc(PageSize * 2, 0xFF);
+    for (u32 i = 0; i < FatClusters; ++i) {
+        set32(ifc, i * 4, 9 + i);
+    }
+    put_cluster(8, ifc);
+
+    // The FAT: the root folder's one cluster ends its chain; every other cluster is free.
+    for (u32 c = 0; c < FatClusters; ++c) {
+        std::vector<u8> fat(PageSize * 2, 0xFF);
+        for (u32 i = 0; i < 256; ++i) {
+            const u32 entry = c * 256 + i;
+            if (entry < AllocEnd) {
+                set32(fat, i * 4, entry == 0 ? 0xFFFFFFFFu : 0x7FFFFFFFu);
+            }
+        }
+        put_cluster(9 + c, fat);
+    }
+
+    // The root folder: "." and "..", made now.
+    std::vector<u8> root(PageSize * 2, 0x00);
+    const std::time_t now = std::time(nullptr);
+    std::tm when{};
+#ifdef _WIN32
+    gmtime_s(&when, &now);
+#else
+    gmtime_r(&now, &when);
+#endif
+    const auto stamp = [&](std::size_t at) {
+        root[at] = 0;
+        root[at + 1] = static_cast<u8>(when.tm_sec);
+        root[at + 2] = static_cast<u8>(when.tm_min);
+        root[at + 3] = static_cast<u8>(when.tm_hour);
+        root[at + 4] = static_cast<u8>(when.tm_mday);
+        root[at + 5] = static_cast<u8>(when.tm_mon + 1);
+        set16(root, at + 6, static_cast<u16>(when.tm_year + 1900));
+    };
+    set16(root, 0x000, 0x8427);
+    set32(root, 0x004, 2);
+    stamp(0x008);
+    stamp(0x018);
+    root[0x040] = '.';
+    set16(root, 0x200, 0xA426);
+    stamp(0x208);
+    stamp(0x218);
+    root[0x240] = '.';
+    root[0x241] = '.';
+    put_cluster(AllocOffset, root);
+
+    auto fp = FileSystem::OpenManagedCFile(path.c_str(), "r+b");
+    if (!fp) {
+        return false;
+    }
+    return std::fwrite(card.data(), card.size(), 1, fp.get()) == 1;
+}
+
+} // namespace
+
 void BeforeMemoryCards(const std::string& serial, const std::string& title) {
     EnsureSaveSync();
     // READER_NO_OWN_CARD=1 leaves the memory cards as the settings have them (for looking
@@ -223,10 +367,15 @@ void BeforeMemoryCards(const std::string& serial, const std::string& title) {
     }
     FileSystem::CreateDirectoryPath(folder.c_str(), true);
     if (!FileSystem::FileExists(card.c_str())) {
-        // A new card as the emulator itself makes one: an ordinary 8 MB card file, which the
-        // game (or the console's own menu) formats the first time it is asked to save.
-        FileMcd_CreateNewCard(Path::Combine(Path::Combine("reader-saves", serial), "card.ps2"), MemoryCardType::File,
-                              MemoryCardFileType::PS2_8MB);
+        // A new card: an ordinary 8 MB card file, formatted. The emulator's own new cards are
+        // blank, which most games format when they first save; some do not (CLANNAD only says
+        // the card is not formatted), and with a card of the game's own there is no other card
+        // to format it in.
+        if (FileMcd_CreateNewCard(Path::Combine(Path::Combine("reader-saves", serial), "card.ps2"),
+                                  MemoryCardType::File, MemoryCardFileType::PS2_8MB) &&
+            !FormatCard(card)) {
+            Console.Warning("Reader: could not format the new memory card %s", card.c_str());
+        }
     }
 }
 
@@ -506,6 +655,65 @@ bool DumpMemory(const std::string& path) {
     const bool written = std::fwrite(eeMem->Main, 1, Ps2MemSize::ExposedRam, file) == Ps2MemSize::ExposedRam;
     std::fclose(file);
     return written;
+}
+
+void SaveStateSlot(int slot) {
+    VMManager::SaveStateToSlot(slot, false, [](const std::string& message) {
+        Console.Error("Reader: save state: %s", message.c_str());
+    });
+}
+
+bool LoadStateSlot(int slot) {
+    return VMManager::LoadStateFromSlot(slot);
+}
+
+void SetTurbo(bool on) {
+    VMManager::SetLimiterMode(on ? LimiterModeType::Turbo : LimiterModeType::Nominal);
+}
+
+void SetPaused(bool paused) {
+    VMManager::SetPaused(paused);
+}
+
+bool DumpIopMemory(const std::string& path) {
+    if (!iopMem) {
+        return false;
+    }
+    std::FILE* file = std::fopen(path.c_str(), "wb");
+    if (!file) {
+        return false;
+    }
+    const bool written = std::fwrite(iopMem->Main, 1, Ps2MemSize::IopRam, file) == Ps2MemSize::IopRam;
+    std::fclose(file);
+    return written;
+}
+
+bool DumpVram4(const std::string& path) {
+    std::FILE* file = std::fopen(path.c_str(), "wb");
+    if (!file) {
+        return false;
+    }
+    std::fclose(file);
+    // On the GS thread, where its memory is; the file is written there.
+    MTGS::RunOnGSThread([path]() {
+        if (!g_gs_renderer) {
+            return;
+        }
+        const GSLocalMemory& mem = g_gs_renderer->m_mem;
+        constexpr int width = 1024;
+        constexpr int height = 8192; // 4 MB of 4-bit pixels
+        std::vector<u8> pixels(static_cast<size_t>(width) * height);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                pixels[static_cast<size_t>(y) * width + x] = static_cast<u8>(mem.ReadPixel4(x, y, 0, width / 64));
+            }
+        }
+        if (std::FILE* out = std::fopen(path.c_str(), "wb")) {
+            std::fwrite(pixels.data(), 1, pixels.size(), out);
+            std::fclose(out);
+        }
+    });
+    return true;
 }
 
 void RunOnEmulator(std::function<void()> work) {
